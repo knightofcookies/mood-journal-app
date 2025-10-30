@@ -6,7 +6,10 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		? {
 				id: locals.user.id,
 				username: locals.user.username,
-				avatar_url: (locals.user as { avatar_url?: string | null }).avatar_url ?? null
+				avatarUrl:
+					(locals.user as { avatarUrl?: string | null; avatar_url?: string | null }).avatarUrl ??
+					(locals.user as { avatar_url?: string | null }).avatar_url ??
+					null
 			}
 		: null;
 	return { user };

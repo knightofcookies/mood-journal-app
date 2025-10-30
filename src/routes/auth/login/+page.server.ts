@@ -6,8 +6,6 @@ import { sha256 } from '@oslojs/crypto/sha2';
 import { encodeHexLowerCase } from '@oslojs/encoding';
 import { createSession, generateSessionToken, sessionCookieName } from '$lib/server/auth';
 import { allow, reset } from '$lib/server/rateLimit';
-import { env } from '$env/dynamic/private';
-import path from 'path';
 import { eq } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -18,177 +16,206 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, getClientAddress }) => {
+		const startTime = Date.now();
+		
 		try {
-			const resolved = path.resolve(process.cwd(), String(env.DATABASE_URL || ''));
-			console.log(
-				'[auth] login handler start - env.DATABASE_URL:',
-				env.DATABASE_URL,
-				'resolved:',
-				resolved,
-				'cwd:',
-				process.cwd()
-			);
-		} catch (e) {
-			console.error('[auth] error resolving DB path', e);
-		}
-		const form = await request.formData();
-		const email = String(form.get('email') || '');
-		const password = String(form.get('password') || '');
+			const form = await request.formData();
+			const email = String(form.get('email') || '').toLowerCase().trim();
+			const password = String(form.get('password') || '');
 
-		const ip =
-			request.headers.get('x-forwarded-for') ||
-			request.headers.get('x-real-ip') ||
-			request.headers.get('remote_addr') ||
-			'local';
-		if (!allow(ip, 50, 60_000)) {
-			return fail(429, {
-				message: 'Too many login attempts. Please wait a moment before trying again.'
-			});
-		}
-
-		if (!email || !password) {
-			const missing = [];
-			if (!email) missing.push('email');
-			if (!password) missing.push('password');
-			return fail(400, { message: `Please provide your ${missing.join(' and ')}` });
-		}
-
-		const [row] = await db
-			.select({
-				id: table.user.id,
-				password_hash: table.user.password_hash,
-				failed_attempts: table.user.failed_attempts,
-				locked_until: table.user.locked_until
-			})
-			.from(table.user)
-			.where(eq(table.user.email, email));
-		if (!row) {
-			return fail(400, { message: 'This user does not exist' });
-		}
-
-		// check locked_until
-		const rawLocked = row.locked_until;
-		let lockedUntil: number;
-		if (rawLocked instanceof Date) {
-			lockedUntil = rawLocked.getTime();
-		} else if (typeof rawLocked === 'number') {
-			// drizzle/sqlite timestamp mode may return seconds; normalize to ms
-			lockedUntil = rawLocked > 1e12 ? rawLocked : rawLocked * 1000;
-		} else {
-			// string or other
-			lockedUntil = new Date(String(rawLocked)).getTime();
-		}
-
-		if (lockedUntil > Date.now()) {
-			console.log('[auth] rejecting login - account locked', {
-				id: row.id,
-				lockedUntil,
-				now: Date.now()
-			});
-			return fail(403, {
-				message:
-					'Account temporarily locked due to too many failed attempts. Please try again later.'
-			});
-		}
-
-		const { verify } = await import('argon2');
-		const ok = await verify(row.password_hash, password);
-		console.log('[auth] password verify result for user', row.id, ok);
-		if (!ok) {
-			// increment failed_attempts
-			const attempts = (row.failed_attempts || 0) + 1;
-			const updates: { failed_attempts: number; locked_until?: Date } = {
-				failed_attempts: attempts
-			};
-			const LOCK_THRESHOLD = 5;
-			const LOCK_MINUTES = 15;
-			if (attempts >= LOCK_THRESHOLD) {
-				updates.locked_until = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
-			}
-			await db.update(table.user).set(updates).where(eq(table.user.id, row.id));
-
-			return fail(400, { message: 'Incorrect password. Please try again.' });
-		}
-
-		// Perform an atomic reset + session creation on the same SQLite client to ensure visibility
-		const expiresAtMs = Date.now() + 1000 * 60 * 60 * 24 * 30; // ms
-		let finalToken: string | null = null;
-
-		try {
-			// Drizzle with better-sqlite3 requires a synchronous transaction callback (cannot return a promise)
-			db.transaction((tx) => {
-				tx.update(table.user)
-					.set({ failed_attempts: 0, locked_until: new Date(0) })
-					.where(eq(table.user.id, row.id))
-					.run();
-
-				// Insert session, retrying on unlikely primary-key collisions
-				let tries = 0;
-				while (tries < 5) {
-					tries += 1;
-					const token = generateSessionToken();
-					const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-					try {
-						tx.insert(table.session)
-							.values({ id: sessionId, userId: row.id, expiresAt: new Date(expiresAtMs) })
-							.run();
-						// success — remember token to set cookie after txn
-						finalToken = token;
-						break;
-					} catch (e: unknown) {
-						// on primary key collision, retry; otherwise rethrow
-						if ((e as { code?: string })?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' && tries < 5) {
-							continue;
-						}
-						throw e;
-					}
-				}
-			});
-
-			// set cookie with token (from the successful insert)
-			if (finalToken) {
-				cookies.set(sessionCookieName, finalToken, { expires: new Date(expiresAtMs), path: '/' });
-			} else {
-				// fallback if we somehow didn't create a session inside txn
-				throw new Error('failed to create session inside transaction');
-			}
-			if (process.env.DEBUG_AUTH)
-				console.log('[auth] atomic reset + session creation complete for user', row.id, {
-					expiresAtMs
+			// Get client IP for rate limiting
+			const ip = getClientAddress();
+			
+			// Check rate limit
+			const allowed = await allow(ip, 10, 60_000); // Stricter: 10 attempts per minute
+			if (!allowed) {
+				return fail(429, {
+					message: 'Too many login attempts. Please wait a moment before trying again.'
 				});
-		} catch (err) {
-			console.error('[auth] error running atomic reset + session creation', err);
-			// fallback: attempt to create session via Drizzle
-			try {
-				const fbToken = generateSessionToken();
-				const session = await createSession(fbToken, row.id);
-				cookies.set(sessionCookieName, fbToken, { expires: session.expiresAt, path: '/' });
-			} catch (e) {
-				console.error('[auth] fallback createSession failed', e);
 			}
-		}
-		// reset ip limiter
-		reset(ip);
 
-		try {
-			const [fresh] = await db
-				.select({
-					id: table.user.id,
-					failed_attempts: table.user.failed_attempts,
-					locked_until: table.user.locked_until
-				})
-				.from(table.user)
-				.where(eq(table.user.id, row.id));
-			console.log('[auth] post-login user row:', {
-				id: fresh?.id,
-				failed_attempts: fresh?.failed_attempts,
-				locked_until: fresh?.locked_until
-			});
-		} catch (err) {
-			console.error('[auth] error selecting user after reset', err);
-		}
+			// Input validation
+			if (!email || !password) {
+				// Constant-time delay to prevent timing attacks
+				await new Promise(resolve => setTimeout(resolve, Math.max(0, 100 - (Date.now() - startTime))));
+				return fail(400, { message: 'Please provide both email and password' });
+			}
 
-		throw redirect(303, '/journal');
+			// Email format validation
+			if (!email.includes('@') || email.length < 3) {
+				await new Promise(resolve => setTimeout(resolve, Math.max(0, 100 - (Date.now() - startTime))));
+				return fail(400, { message: 'Invalid email format' });
+			}
+
+			// Query user - wrap in try-catch for database errors
+			let row;
+			try {
+				[row] = await db
+					.select({
+						id: table.user.id,
+						password_hash: table.user.passwordHash,
+						failed_attempts: table.user.failedAttempts,
+						locked_until: table.user.lockedUntil
+					})
+					.from(table.user)
+					.where(eq(table.user.email, email));
+			} catch (dbError) {
+				console.error('[auth] Database error during user lookup:', dbError);
+				// Constant-time delay
+				await new Promise(resolve => setTimeout(resolve, Math.max(0, 100 - (Date.now() - startTime))));
+				return fail(503, { message: 'Service temporarily unavailable. Please try again.' });
+			}
+
+			if (!row) {
+				// User doesn't exist - use constant-time delay to prevent user enumeration
+				await new Promise(resolve => setTimeout(resolve, Math.max(0, 100 - (Date.now() - startTime))));
+				return fail(400, { message: 'Invalid email or password' });
+			}
+
+			// Check account lockout
+			const rawLocked = row.locked_until;
+			let lockedUntil: number;
+			if (rawLocked instanceof Date) {
+				lockedUntil = rawLocked.getTime();
+			} else if (typeof rawLocked === 'number') {
+				lockedUntil = rawLocked > 1e12 ? rawLocked : rawLocked * 1000;
+			} else {
+				lockedUntil = new Date(String(rawLocked)).getTime();
+			}
+
+			if (lockedUntil > Date.now()) {
+				const remainingMinutes = Math.ceil((lockedUntil - Date.now()) / 60000);
+				return fail(403, {
+					message: `Account locked. Please try again in ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}.`
+				});
+			}
+
+			// Verify password
+			const { verify } = await import('argon2');
+			let passwordValid = false;
+			try {
+				passwordValid = await verify(row.password_hash, password);
+			} catch (verifyError) {
+				console.error('[auth] Password verification error:', verifyError);
+				return fail(500, { message: 'Authentication error. Please try again.' });
+			}
+			
+			if (!passwordValid) {
+				// Increment failed attempts
+				const attempts = (row.failed_attempts || 0) + 1;
+				const updates: { failedAttempts: number; lockedUntil?: Date } = {
+					failedAttempts: attempts
+				};
+				
+				const LOCK_THRESHOLD = 5;
+				const LOCK_MINUTES = 15;
+				
+				if (attempts >= LOCK_THRESHOLD) {
+					updates.lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
+				}
+				
+				try {
+					await db.update(table.user).set(updates).where(eq(table.user.id, row.id));
+				} catch (updateError) {
+					console.error('[auth] Error updating failed attempts:', updateError);
+				}
+
+				// Constant-time delay
+				await new Promise(resolve => setTimeout(resolve, Math.max(0, 100 - (Date.now() - startTime))));
+				
+				const remainingAttempts = LOCK_THRESHOLD - attempts;
+				if (remainingAttempts > 0) {
+					return fail(400, { 
+						message: `Invalid email or password. ${remainingAttempts} attempt${remainingAttempts > 1 ? 's' : ''} remaining.` 
+					});
+				} else {
+					return fail(403, {
+						message: `Account locked for ${LOCK_MINUTES} minutes due to too many failed attempts.`
+					});
+				}
+			}
+
+			// Successful login - reset failed attempts and create session atomically
+			const expiresAtMs = Date.now() + 1000 * 60 * 60 * 24 * 30;
+			let finalToken: string | null = null;
+
+			try {
+				db.transaction((tx) => {
+					// Reset failed attempts
+					tx.update(table.user)
+						.set({ failedAttempts: 0, lockedUntil: new Date(0) })
+						.where(eq(table.user.id, row.id))
+						.run();
+
+					// Create session with retry logic
+					let tries = 0;
+					while (tries < 5) {
+						tries += 1;
+						const token = generateSessionToken();
+						const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+						try {
+							tx.insert(table.session)
+								.values({ 
+									sessionToken: sessionId, 
+									userId: row.id, 
+									expires: new Date(expiresAtMs) 
+								})
+								.run();
+							finalToken = token;
+							break;
+						} catch (e: unknown) {
+							if ((e as { code?: string })?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' && tries < 5) {
+								continue;
+							}
+							throw e;
+						}
+					}
+				});
+
+				if (finalToken) {
+					// Set secure cookie
+					cookies.set(sessionCookieName, finalToken, { 
+						expires: new Date(expiresAtMs), 
+						path: '/',
+						httpOnly: true,
+						secure: process.env.NODE_ENV === 'production',
+						sameSite: 'lax'
+					});
+				} else {
+					throw new Error('Failed to create session');
+				}
+			} catch (err) {
+				console.error('[auth] Transaction error:', err);
+				// Fallback session creation
+				try {
+					const fbToken = generateSessionToken();
+					const session = await createSession(fbToken, row.id);
+					cookies.set(sessionCookieName, fbToken, { 
+						expires: session.expires, 
+						path: '/',
+						httpOnly: true,
+						secure: process.env.NODE_ENV === 'production',
+						sameSite: 'lax'
+					});
+				} catch (fallbackError) {
+					console.error('[auth] Fallback session creation failed:', fallbackError);
+					return fail(500, { message: 'Login successful but session creation failed. Please try again.' });
+				}
+			}
+
+			// Reset rate limit on successful login
+			await reset(ip);
+
+			throw redirect(303, '/journal');
+		} catch (error) {
+			// Handle redirect separately (it's expected)
+			if (error instanceof Response && error.status === 303) {
+				throw error;
+			}
+			
+			console.error('[auth] Unexpected error in login:', error);
+			return fail(500, { message: 'An unexpected error occurred. Please try again.' });
+		}
 	}
 };

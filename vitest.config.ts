@@ -10,7 +10,9 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			$lib: path.resolve(__dirname, './src/lib'),
-			$app: path.resolve(__dirname, './src/app')
+			// Provide explicit alias for SvelteKit virtual module in Vitest
+			'$app/server': path.resolve(__dirname, './tests/mocks/app-server.ts'),
+			'$env/dynamic/private': path.resolve(__dirname, './tests/mocks/env-dynamic-private.ts')
 		}
 	}
 });

@@ -116,7 +116,9 @@ async function main() {
 	db.close();
 	try {
 		fs.unlinkSync(dbPath);
-	} catch (e) {}
+	} catch {
+		// ignore
+	}
 	process.exit(0);
 }
 

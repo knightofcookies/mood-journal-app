@@ -9,10 +9,27 @@ import path from 'node:path';
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(303, '/auth/login');
 	const [row] = await db
-		.select({ id: table.user.id, username: table.user.username, email: table.user.email })
+		.select({
+			id: table.user.id,
+			username: table.user.username,
+			email: table.user.email,
+			avatarUrl: table.user.avatarUrl
+		})
 		.from(table.user)
 		.where(eq(table.user.id, locals.user.id));
-	return { user: { id: row.id, username: row.username, email: row.email, avatar_url: null } };
+
+	const linkedAccounts = await db
+		.select({
+			provider: table.account.provider,
+			providerAccountId: table.account.providerAccountId
+		})
+		.from(table.account)
+		.where(eq(table.account.userId, locals.user.id));
+
+	return {
+		user: { id: row.id, username: row.username, email: row.email, avatarUrl: row.avatarUrl },
+		linkedAccounts
+	};
 };
 
 export const actions: Actions = {
@@ -20,9 +37,15 @@ export const actions: Actions = {
 		if (!locals.user) throw redirect(303, '/auth/login');
 		const form = await request.formData();
 		const username = String(form.get('username') || '').trim();
-		const email = String(form.get('email') || '').trim();
-		if (username.length < 2 || !email.includes('@')) return fail(400, { message: 'Invalid input' });
-		await db.update(table.user).set({ username, email }).where(eq(table.user.id, locals.user.id));
+		if (username.length < 2) return fail(400, { message: 'Username must be at least 2 characters' });
+		
+		await db.update(table.user).set({ username }).where(eq(table.user.id, locals.user.id));
+		
+		// Update the session with new username
+		if (locals.session) {
+			locals.user.username = username;
+		}
+		
 		return { ok: true };
 	},
 	avatar: async ({ request, locals }) => {
@@ -40,7 +63,7 @@ export const actions: Actions = {
 		const arrayBuffer = await file.arrayBuffer();
 		await fs.writeFile(filepath, Buffer.from(arrayBuffer));
 		const url = `/uploads/avatars/${filename}`;
-		await db.update(table.user).set({ avatar_url: url }).where(eq(table.user.id, locals.user.id));
+		await db.update(table.user).set({ avatarUrl: url }).where(eq(table.user.id, locals.user.id));
 		return { ok: true, url };
 	}
 };

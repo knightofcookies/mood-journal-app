@@ -1,123 +1,20 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+
 	let { data } = $props();
-	import { marked } from 'marked';
-	import DOMPurify from 'dompurify';
 
-	import { browser } from '$app/environment';
-	let Purify: typeof DOMPurify | null = null;
-	if (browser) {
-		import('dompurify').then((m) => (Purify = m.default));
+	function getMoodEmoji(mood: string) {
+		const emojis: Record<string, string> = {
+			happy: '😊',
+			neutral: '😐',
+			sad: '😢',
+			anxious: '😰',
+			excited: '🤩'
+		};
+		return emojis[mood] || '😐';
 	}
 
-	// Define entry type
-	type Entry = {
-		id: string;
-		userId?: string; // optional for optimistic entries
-		content: string;
-		mood: string;
-		created_at: string | Date;
-		updated_at?: string | Date; // optional for optimistic entries
-		local?: boolean; // optional for optimistic entries
-		html?: string; // sanitized HTML for display
-	};
-
-	// Local UI state
-	let content = $state('');
-	let mood = $state('neutral');
-	let attachments = $state<Array<{ url: string; type: string }>>([]);
-	// Local optimistic entries to show immediately after submit
-	let localEntries = $state<Array<Entry>>([]);
-	let serverEntries = $state<Array<Entry>>(Array.isArray(data?.entries) ? data.entries : []);
-	let message = $state('');
-	// Filter shown entries by mood
-	let filterMood = $state('all');
-	let searchQuery = $state('');
-	let currentPage = $state(1);
-	const entriesPerPage = 10;
-	let uploading = $state(false);
-	let submitting = $state(false);
-	let deleting = $state<Set<string>>(new Set());
-	// Editing state
-	let editingId = $state<string | null>(null);
-	let editContent = $state('');
-	let editMood = $state('neutral');
-	let dragOver = $state(false);
-
-	// Autosave functionality
-	const AUTOSAVE_KEY = 'journal-draft';
-	function saveDraft() {
-		if (browser) {
-			localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ content, mood, timestamp: Date.now() }));
-		}
-	}
-	function loadDraft() {
-		if (browser) {
-			try {
-				const saved = localStorage.getItem(AUTOSAVE_KEY);
-				if (saved) {
-					const draft = JSON.parse(saved);
-					// Only restore if it's recent (within 24 hours)
-					if (Date.now() - draft.timestamp < 24 * 60 * 60 * 1000) {
-						content = draft.content || '';
-						mood = draft.mood || 'neutral';
-					} else {
-						// Clear old draft
-						localStorage.removeItem(AUTOSAVE_KEY);
-					}
-				}
-			} catch (e) {
-				console.error('Failed to load draft', e);
-			}
-		}
-	}
-	function clearDraft() {
-		if (browser) {
-			localStorage.removeItem(AUTOSAVE_KEY);
-		}
-	}
-
-	// Load draft on mount
-	if (browser) {
-		loadDraft();
-	}
-
-	// Autosave on changes
-	$effect(() => {
-		if (content || mood !== 'neutral') {
-			saveDraft();
-		}
-	});
-	const combined = $derived.by(() => [...localEntries, ...serverEntries]);
-	const shown = $derived.by(() => {
-		let filtered = combined;
-		if (filterMood !== 'all') {
-			filtered = filtered.filter((e) => e.mood === filterMood);
-		}
-		if (searchQuery.trim()) {
-			const query = searchQuery.toLowerCase();
-			filtered = filtered.filter(
-				(e) => e.content.toLowerCase().includes(query) || e.mood.toLowerCase().includes(query)
-			);
-		}
-		return filtered;
-	});
-
-	const paginatedEntries = $derived.by(() => {
-		const start = (currentPage - 1) * entriesPerPage;
-		const end = start + entriesPerPage;
-		return shown.slice(start, end);
-	});
-
-	const totalPages = $derived.by(() => Math.ceil(shown.length / entriesPerPage));
-
-	// Reset to page 1 when filters change
-	$effect(() => {
-		filterMood;
-		searchQuery;
-		currentPage = 1;
-	});
-
-	// Format relative time
 	function formatRelativeTime(date: Date | string) {
 		const now = new Date();
 		const entryDate = new Date(date);
@@ -131,808 +28,202 @@
 		if (diffHours < 24) return `${diffHours}h ago`;
 		if (diffDays < 7) return `${diffDays}d ago`;
 
-		return entryDate.toLocaleDateString();
+		return entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 	}
 
-	// Handle create with optimistic UI via form submit to ?/create
-	async function handleCreateSubmit(e: SubmitEvent) {
-		e.preventDefault();
-		submitting = true;
-		const formEl = e.currentTarget as HTMLFormElement;
-		const fd = new FormData(formEl);
-		// optimistic entry
-		const optimistic: Entry = {
-			id: 'local-' + crypto.randomUUID(),
-			content: String(fd.get('content') || content),
-			mood: String(fd.get('mood') || mood),
-			created_at: new Date().toISOString(),
-			local: true
-		};
-		localEntries = [optimistic, ...localEntries];
-		try {
-			const res = await fetch('?/create', {
-				method: 'POST',
-				body: fd,
-				headers: { Accept: 'application/json' }
-			});
-			if (!res.ok) throw new Error('create_failed');
-			const body = await res.json();
-			if (body?.ok) {
-				// reset editor state
-				content = '';
-				mood = 'neutral';
-				attachments = [];
-				clearDraft();
-				// merge optimistic into server list (could also refetch)
-				serverEntries = [
-					{
-						id: body.id,
-						userId: '', // will be set by server
-						content: optimistic.content,
-						mood: optimistic.mood,
-						html: sanitize(String(marked.parse(optimistic.content))),
-						created_at: new Date().toISOString(),
-						updated_at: new Date().toISOString()
-					},
-					...serverEntries
-				];
-				localEntries = [];
-			} else {
-				message = body?.error || 'Save failed';
-			}
-		} catch (err) {
-			console.error(err);
-			message = 'Save failed';
-		} finally {
-			submitting = false;
-		}
-	}
+	let searchQuery = $state(data.filters.search);
+	let moodFilter = $state(data.filters.mood);
 
-	// Sanitize rendered markdown using DOMPurify (browser only)
-	function sanitize(html: string) {
-		if (browser && Purify?.sanitize) {
-			return Purify.sanitize(html, {
-				ADD_TAGS: ['audio', 'source'],
-				ADD_ATTR: ['controls', 'src']
-			});
-		}
-		// If DOMPurify not available, return as-is (should not happen in browser)
-		return html;
-	}
-
-	// Process HTML for entries to make images smaller
-	function processEntryHtml(html: string) {
-		return html.replace(
-			/<img([^>]+)>/g,
-			'<img$1 class="max-w-full h-auto rounded border border-slate-200 dark:border-slate-700">'
-		);
-	}
-
-	let previewHtml = $derived.by(() => sanitize(String(marked.parse(content || ''))));
-
-	// Insert markdown at cursor in the textarea
-	function insertAtCursor(el: HTMLTextAreaElement, insertText: string) {
-		const start = el.selectionStart || 0;
-		const end = el.selectionEnd || 0;
-		const before = el.value.substring(0, start);
-		const after = el.value.substring(end);
-		el.value = before + insertText + after;
-		const pos = start + insertText.length;
-		el.selectionStart = el.selectionEnd = pos;
-		// update bound value
-		content = el.value;
-		el.focus();
-	}
-
-	// Helpers for editor-like behavior
-	function getTA() {
-		return document.getElementById('content') as HTMLTextAreaElement | null;
-	}
-
-	function wrapSelection(prefix: string, suffix: string = prefix) {
-		const ta = getTA();
-		if (!ta) return;
-		const start = ta.selectionStart ?? 0;
-		const end = ta.selectionEnd ?? 0;
-		const selected = ta.value.slice(start, end);
-		const hasSel = end > start;
-		const inserted = hasSel ? `${prefix}${selected}${suffix}` : `${prefix}${suffix}`;
-		const before = ta.value.slice(0, start);
-		const after = ta.value.slice(end);
-		ta.value = before + inserted + after;
-		content = ta.value;
-		ta.focus();
-		if (hasSel) {
-			ta.selectionStart = before.length + prefix.length;
-			ta.selectionEnd = before.length + prefix.length + selected.length;
+	function updateFilters() {
+		const params = new URLSearchParams($page.url.searchParams);
+		if (searchQuery) {
+			params.set('q', searchQuery);
 		} else {
-			ta.selectionStart = ta.selectionEnd = before.length + prefix.length;
+			params.delete('q');
 		}
-	}
-
-	function addLinePrefix(prefix: string) {
-		const ta = getTA();
-		if (!ta) return;
-		const start = ta.selectionStart ?? 0;
-		const end = ta.selectionEnd ?? 0;
-		const before = ta.value.slice(0, start);
-		const selected = ta.value.slice(start, end);
-		const after = ta.value.slice(end);
-		const target = selected || '';
-		const lines = target.split('\n');
-		const modified = (target ? lines : ['']).map((l) => `${prefix}${l}`).join('\n');
-		ta.value = before + modified + after;
-		content = ta.value;
-		const caret = (before + modified).length;
-		ta.selectionStart = ta.selectionEnd = caret;
-		ta.focus();
-	}
-
-	function insertCodeBlock() {
-		const ta = getTA();
-		if (!ta) return;
-		const start = ta.selectionStart ?? 0;
-		const end = ta.selectionEnd ?? 0;
-		const selected = ta.value.slice(start, end) || 'code';
-		const before = ta.value.slice(0, start);
-		const after = ta.value.slice(end);
-		const block = `\n\n\`\`\`\n${selected}\n\`\`\`\n\n`;
-		ta.value = before + block + after;
-		content = ta.value;
-		const pos = (before + block).length;
-		ta.selectionStart = ta.selectionEnd = pos;
-		ta.focus();
-	}
-
-	function insertHorizontalRule() {
-		const ta = getTA();
-		if (!ta) return;
-		insertAtCursor(ta, '\n\n---\n\n');
-	}
-
-	function insertLink() {
-		const ta = getTA();
-		if (!ta) return;
-		const start = ta.selectionStart ?? 0;
-		const end = ta.selectionEnd ?? 0;
-		const selected = ta.value.slice(start, end) || 'text';
-		const before = ta.value.slice(0, start);
-		const after = ta.value.slice(end);
-		const snippet = `[${selected}](url)`;
-		ta.value = before + snippet + after;
-		content = ta.value;
-		// place cursor on url
-		const urlStart = (before + `[${selected}](`).length;
-		const urlEnd = urlStart + 3; // 'url'
-		ta.selectionStart = urlStart;
-		ta.selectionEnd = urlEnd;
-		ta.focus();
-	}
-
-	function onEditorKeyDown(e: KeyboardEvent) {
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-			e.preventDefault();
-			wrapSelection('**', '**');
-		} else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
-			e.preventDefault();
-			wrapSelection('*', '*');
-		} else if (e.key === 'Tab') {
-			e.preventDefault();
-			const ta = getTA();
-			if (!ta) return;
-			insertAtCursor(ta, '  ');
+		if (moodFilter !== 'all') {
+			params.set('mood', moodFilter);
+		} else {
+			params.delete('mood');
 		}
+		params.delete('page'); // Reset to page 1 when filters change
+		goto(`?${params.toString()}`);
 	}
 
-	// Upload attachments to /journal/upload
-	async function handleUpload(files: FileList | null) {
-		if (!files || files.length === 0) return;
-		uploading = true;
-		const maxSize = 10 * 1024 * 1024; // 10MB client-side limit
-		const fd = new FormData();
-		for (const f of Array.from(files)) {
-			if (f.size > maxSize) continue;
-			fd.append('file', f);
-		}
-		try {
-			const res = await fetch('/journal/upload', { method: 'POST', body: fd });
-			if (!res.ok) throw new Error('upload failed');
-			const body = await res.json();
-			// Expect body to be { ok: true, files: [{ url, type }] }
-			if (body?.files) {
-				attachments = attachments.concat(body.files);
-				// Append uploaded files into the editor content so they are persisted in the entry
-				for (const f of body.files) {
-					if (f.type && f.type.startsWith('image/')) {
-						content += `\n\n![](${f.url})\n\n`;
-					} else if (f.type && f.type.startsWith('audio/')) {
-						// HTML audio is supported by marked (it will render raw HTML)
-						content += `\n\n<audio controls src="${f.url}"></audio>\n\n`;
-					} else {
-						content += `\n\n[attachment](${f.url})\n\n`;
-					}
-				}
-			}
-		} catch (err) {
-			console.error('upload error', err);
-			message = 'Upload failed';
-		} finally {
-			uploading = false;
-		}
-	}
-
-	// Delete an entry by POSTing to the delete handler
-	async function deleteEntry(id: string) {
-		deleting.add(id);
-		const fd = new FormData();
-		fd.append('id', id);
-		try {
-			const res = await fetch('/journal/entry/delete', { method: 'POST', body: fd });
-			const body = await res.json();
-			if (body?.ok) {
-				// remove from local optimistic entries and request update
-				localEntries = localEntries.filter((e) => e.id !== id);
-				// trigger server refetch (no-op placeholder)
-				message = 'Deleted';
-			} else {
-				message = body?.error || 'Delete failed';
-			}
-		} catch (err) {
-			console.error('delete failed', err);
-			message = 'Delete failed';
-		} finally {
-			deleting.delete(id);
-		}
-	}
-
-	// Drag and drop handlers
-	function onDragOver(e: DragEvent) {
-		e.preventDefault();
-		dragOver = true;
-	}
-
-	function onDragLeave(e: DragEvent) {
-		e.preventDefault();
-		dragOver = false;
-	}
-
-	function onDrop(e: DragEvent) {
-		e.preventDefault();
-		dragOver = false;
-		const files = e.dataTransfer?.files;
-		if (files) {
-			handleUpload(files);
-		}
-	}
-
-	// Inline editing functions
-	function startEditing(entry: Entry) {
-		editingId = entry.id;
-		editContent = entry.content;
-		editMood = entry.mood;
-	}
-
-	function cancelEditing() {
-		editingId = null;
-		editContent = '';
-		editMood = 'neutral';
-	}
-
-	async function saveEdit() {
-		if (!editingId) return;
-		const fd = new FormData();
-		fd.append('id', editingId);
-		fd.append('content', editContent);
-		fd.append('mood', editMood);
-		try {
-			const res = await fetch('/journal/entry/update', { method: 'POST', body: fd });
-			const body = await res.json();
-			if (body?.ok) {
-				// Update the entry in the list
-				serverEntries = serverEntries.map((entry) =>
-					entry.id === editingId
-						? {
-								...entry,
-								content: editContent,
-								mood: editMood,
-								html: sanitize(String(marked.parse(editContent))),
-								updated_at: new Date().toISOString()
-							}
-						: entry
-				);
-				localEntries = localEntries.map((entry) =>
-					entry.id === editingId
-						? {
-								...entry,
-								content: editContent,
-								mood: editMood,
-								html: sanitize(String(marked.parse(editContent))),
-								updated_at: new Date().toISOString()
-							}
-						: entry
-				);
-				cancelEditing();
-				message = 'Entry updated';
-			} else {
-				message = body?.error || 'Update failed';
-			}
-		} catch (err) {
-			console.error('update failed', err);
-			message = 'Update failed';
-		}
+	function goToPage(pageNum: number) {
+		const params = new URLSearchParams($page.url.searchParams);
+		params.set('page', pageNum.toString());
+		goto(`?${params.toString()}`);
 	}
 </script>
 
-<main class="px-4 py-6 md:px-6">
-	<div class="mx-auto max-w-5xl">
-		<h1 class="mb-4 text-2xl font-semibold tracking-tight">Journal</h1>
+<svelte:head>
+	<title>Journal | Mood Journal</title>
+</svelte:head>
 
-		<form
-			method="post"
-			action="?/create"
-			onsubmit={handleCreateSubmit}
-			ondragover={onDragOver}
-			ondragleave={onDragLeave}
-			ondrop={onDrop}
-			class="space-y-4 rounded-xl border border-slate-200 bg-white/70 p-4 dark:border-slate-700 dark:bg-slate-800/40 {dragOver
-				? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20'
-				: ''} transition-colors"
-		>
-			{#if message}
-				<div
-					class="rounded-md border border-red-200/80 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
-				>
-					{message}
+<div class="min-h-screen bg-background">
+	<div class="max-w-6xl mx-auto px-4 py-8">
+		<!-- Header -->
+		<div class="mb-8">
+			<div class="flex items-center justify-between mb-6">
+				<div>
+					<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Journal</h1>
+					<p class="text-gray-600 dark:text-gray-400 mt-2">
+						{data.pagination.totalEntries} {data.pagination.totalEntries === 1 ? 'entry' : 'entries'}
+					</p>
 				</div>
-			{/if}
-			{#if dragOver}
-				<div
-					class="rounded-md border border-indigo-200/80 bg-indigo-50 px-3 py-2 text-center text-sm text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-300"
-				>
-					Drop files here to upload
-				</div>
-			{/if}
-			{#if uploading}
-				<div class="flex items-center gap-2">
-					<div class="h-2 flex-1 rounded-full bg-slate-200 dark:bg-slate-700">
-						<div class="h-full w-full animate-pulse rounded-full bg-indigo-500"></div>
-					</div>
-					<span class="text-sm text-slate-600 dark:text-slate-400">Uploading...</span>
-				</div>
-			{/if}
-			<div class="flex flex-wrap gap-2">
-				<div
-					class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50/60 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/40"
-				>
-					<button
-						type="button"
-						title="Bold (⌘/Ctrl+B)"
-						aria-label="Bold"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => wrapSelection('**', '**')}
+				<div class="flex gap-3">
+					<a
+						href="/journal/analytics"
+						class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
 					>
-						<span class="font-semibold">B</span>
-					</button>
-					<button
-						type="button"
-						title="Italic (⌘/Ctrl+I)"
-						aria-label="Italic"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => wrapSelection('*', '*')}
+						<span>📊</span>
+						<span class="hidden sm:inline">Analytics</span>
+					</a>
+					<a
+						href="/journal/search"
+						class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
 					>
-						<span class="italic">I</span>
-					</button>
-					<button
-						type="button"
-						title="Inline code"
-						aria-label="Inline code"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => wrapSelection('`', '`')}
+						<span>🔍</span>
+						<span class="hidden sm:inline">Search</span>
+					</a>
+					<a
+						href="/journal/new"
+						class="px-6 py-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 font-semibold rounded-lg transition-colors flex items-center gap-2"
 					>
-						<span class="font-mono text-xs">`</span>
-					</button>
-					<button
-						type="button"
-						title="Code block"
-						aria-label="Code block"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={insertCodeBlock}
-					>
-						<svg
-							viewBox="0 0 24 24"
-							class="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"><path d="M9 18l-6-6 6-6" /><path d="M15 6l6 6-6 6" /></svg
-						>
-					</button>
-					<button
-						type="button"
-						title="Heading"
-						aria-label="Heading"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => insertAtCursor(getTA()!, '# ')}
-					>
-						<span class="text-sm font-semibold">H</span>
-					</button>
-					<button
-						type="button"
-						title="Bullet list"
-						aria-label="Bullet list"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => insertAtCursor(getTA()!, '- ')}
-					>
-						<span class="text-sm">•</span>
-					</button>
-					<button
-						type="button"
-						title="Link"
-						aria-label="Link"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={insertLink}
-					>
-						<svg
-							viewBox="0 0 24 24"
-							class="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path
-								d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
-							/></svg
-						>
-					</button>
-					<button
-						type="button"
-						title="Horizontal rule"
-						aria-label="Horizontal rule"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={insertHorizontalRule}
-					>
-						<span class="text-sm">—</span>
-					</button>
-				</div>
-				<div
-					class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50/60 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/40"
-				>
-					<button
-						type="button"
-						title="Heading 1"
-						aria-label="Heading 1"
-						class="inline-flex h-8 items-center justify-center rounded px-2 text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => addLinePrefix('# ')}>H1</button
-					>
-					<button
-						type="button"
-						title="Heading 2"
-						aria-label="Heading 2"
-						class="inline-flex h-8 items-center justify-center rounded px-2 text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => addLinePrefix('## ')}>H2</button
-					>
-					<button
-						type="button"
-						title="Quote"
-						aria-label="Quote"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => addLinePrefix('> ')}
-					>
-						<svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor"
-							><path
-								d="M7.17 6A4.17 4.17 0 003 10.17V18h6v-7.83A4.17 4.17 0 007.17 6zM17.17 6A4.17 4.17 0 0013 10.17V18h6v-7.83A4.17 4.17 0 0017.17 6z"
-							/></svg
-						>
-					</button>
-					<button
-						type="button"
-						title="Bulleted list"
-						aria-label="Bulleted list"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={() => addLinePrefix('- ')}
-					>
-						<svg
-							viewBox="0 0 24 24"
-							class="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="4" cy="6" r="1.5" /><circle
-								cx="4"
-								cy="12"
-								r="1.5"
-							/><circle cx="4" cy="18" r="1.5" /></svg
-						>
-					</button>
-				</div>
-				<div
-					class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50/60 p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/40"
-				>
-					<button
-						type="button"
-						title="Link"
-						aria-label="Link"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={insertLink}
-					>
-						<svg
-							viewBox="0 0 24 24"
-							class="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path d="M10 13a5 5 0 007.07 0l1.41-1.41a5 5 0 10-7.07-7.07L10 5" /><path
-								d="M14 11a5 5 0 01-7.07 0L5.5 9.57a5 5 0 017.07-7.07L14 4"
-							/></svg
-						>
-					</button>
-					<button
-						type="button"
-						title="Horizontal rule"
-						aria-label="Horizontal rule"
-						class="inline-flex h-8 w-8 items-center justify-center rounded text-slate-700 hover:bg-slate-200 dark:text-slate-200 dark:hover:bg-slate-800"
-						onclick={insertHorizontalRule}
-					>
-						<svg
-							viewBox="0 0 24 24"
-							class="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"><path d="M4 12h16" /></svg
-						>
-					</button>
+						<span>+</span>
+						<span>New Entry</span>
+					</a>
 				</div>
 			</div>
-			<div>
-				<label
-					for="content"
-					class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Entry</label
-				>
-				<textarea
-					id="content"
-					name="content"
-					bind:value={content}
-					rows={8}
-					class="w-full rounded-md border border-slate-300 bg-white p-3 font-mono text-sm leading-6 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/40"
-					placeholder="Write your thoughts in markdown..."
-					onkeydown={onEditorKeyDown}
-				></textarea>
-			</div>
 
-			<div class="flex flex-wrap items-center gap-3">
-				<label for="mood" class="text-sm font-medium text-slate-700 dark:text-slate-200">Mood</label
-				>
-				<select
-					id="mood"
-					name="mood"
-					bind:value={mood}
-					class="w-40 rounded-md border border-slate-300 bg-white p-1.5 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/40"
-				>
-					<option value="happy">Happy</option>
-					<option value="neutral">Neutral</option>
-					<option value="sad">Sad</option>
-					<option value="anxious">Anxious</option>
-				</select>
-				<label
-					class="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800"
-				>
-					<input
-						type="file"
-						class="hidden"
-						multiple
-						onchange={(e) => handleUpload((e.target as HTMLInputElement).files)}
-					/>
-					<span>Browse files…</span>
-				</label>
-				<div class="grow"></div>
-				<button
-					type="submit"
-					disabled={submitting}
-					class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-				>
-					{#if submitting}
-						<div
-							class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-						></div>
-					{/if}
-					{submitting ? 'Saving...' : 'Save'}
-				</button>
-			</div>
-
-			<div class="text-xs text-slate-500">Attachments: {attachments.length}</div>
-		</form>
-
-		<section class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-			<div>
-				<h2 class="font-semibold text-slate-800 dark:text-slate-200">Preview</h2>
-				<div
-					class="prose rounded-lg border border-slate-200 bg-white/70 p-4 prose-slate dark:border-slate-700 dark:bg-slate-800/40 dark:prose-invert"
-				>
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-					{@html previewHtml}
-				</div>
-				{#if attachments.length}
-					<div class="mt-2">
-						<div class="mb-2 text-sm text-slate-600 dark:text-slate-400">
-							Attachments ({attachments.length})
-						</div>
-						<div class="flex flex-wrap gap-2">
-							{#each attachments as a (a.url)}
-								{#if a.type.startsWith('image/')}
-									<div class="relative">
-										<img
-											src={a.url}
-											alt="attachment"
-											class="h-16 w-16 rounded border border-slate-200 object-cover dark:border-slate-700"
-										/>
-										<button
-											type="button"
-											class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white hover:bg-red-600"
-											onclick={() => (attachments = attachments.filter((att) => att.url !== a.url))}
-											title="Remove">×</button
-										>
-									</div>
-								{:else if a.type.startsWith('audio/')}
-									<div
-										class="flex items-center gap-2 rounded border border-slate-200 bg-slate-100 p-2 dark:border-slate-700 dark:bg-slate-800"
-									>
-										<audio controls src={a.url} class="h-8 w-32"></audio>
-										<button
-											type="button"
-											class="text-sm text-red-500 hover:text-red-600"
-											onclick={() => (attachments = attachments.filter((att) => att.url !== a.url))}
-											title="Remove">Remove</button
-										>
-									</div>
-								{/if}
-							{/each}
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<div>
-				<h2
-					class="flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200"
-				>
-					Recent entries
-					<div class="flex gap-2">
+			<!-- Filters -->
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+				<div class="flex flex-col sm:flex-row gap-4">
+					<!-- Search -->
+					<div class="flex-1">
 						<input
-							type="search"
-							placeholder="Search entries..."
+							type="text"
 							bind:value={searchQuery}
-							class="w-48 rounded-md border border-slate-300 bg-white p-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/40"
-							aria-label="Search entries"
+							onkeydown={(e) => e.key === 'Enter' && updateFilters()}
+							placeholder="Search entries..."
+							class="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
 						/>
-						<select
-							bind:value={filterMood}
-							class="w-40 rounded-md border border-slate-300 bg-white p-1.5 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/40"
-							aria-label="Filter by mood"
-						>
-							<option value="all">All moods</option>
-							<option value="happy">Happy</option>
-							<option value="neutral">Neutral</option>
-							<option value="sad">Sad</option>
-							<option value="anxious">Anxious</option>
-						</select>
 					</div>
-				</h2>
-				{#if paginatedEntries?.length}
-					<ul class="space-y-3">
-						{#each paginatedEntries as it (it.id)}
-							<li
-								class="rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-800/40"
+
+					<!-- Mood Filter -->
+					<div class="flex gap-2">
+						<button
+							onclick={() => { moodFilter = 'all'; updateFilters(); }}
+							class="px-4 py-2 rounded-lg border transition-all {moodFilter === 'all'
+								? 'border-gray-900 dark:border-white bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+								: 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'}"
+						>
+							All
+						</button>
+						{#each ['happy', 'neutral', 'sad', 'anxious', 'excited'] as mood}
+							<button
+								onclick={() => { moodFilter = mood; updateFilters(); }}
+								class="px-3 py-2 rounded-lg border transition-all {moodFilter === mood
+									? 'border-gray-900 dark:border-white bg-gray-50 dark:bg-gray-800'
+									: 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}"
+								title={mood}
 							>
-								<div class="flex items-start justify-between">
-									<div class="text-sm text-gray-500 dark:text-gray-400">
-										{formatRelativeTime(it.created_at)} — {it.mood}
-									</div>
-									<div class="flex gap-2">
-										{#if it.local}
-											<span class="text-xs text-yellow-700 dark:text-yellow-400">pending</span>
-										{:else if editingId === it.id}
-											<button
-												type="button"
-												class="text-sm text-green-600 hover:underline"
-												onclick={saveEdit}>Save</button
-											>
-											<button
-												type="button"
-												class="text-sm text-gray-600 hover:underline"
-												onclick={cancelEditing}>Cancel</button
-											>
-										{:else}
-											<button
-												type="button"
-												class="text-sm text-blue-600 hover:underline"
-												onclick={() => startEditing(it)}>Edit</button
-											>
-											<button
-												type="button"
-												class="text-sm text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-												disabled={deleting.has(it.id)}
-												onclick={() => deleteEntry(it.id)}
-											>
-												{deleting.has(it.id) ? 'Deleting...' : 'Delete'}
-											</button>
-										{/if}
-									</div>
-								</div>
-								{#if editingId === it.id}
-									<div class="mt-2 space-y-2">
-										<textarea
-											bind:value={editContent}
-											rows={4}
-											class="w-full rounded-md border border-slate-300 bg-white p-3 font-mono text-sm leading-6 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/40"
-										></textarea>
-										<select
-											bind:value={editMood}
-											class="w-40 rounded-md border border-slate-300 bg-white p-1.5 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/40"
-										>
-											<option value="happy">Happy</option>
-											<option value="neutral">Neutral</option>
-											<option value="sad">Sad</option>
-											<option value="anxious">Anxious</option>
-										</select>
-									</div>
-								{:else}
-									<div class="prose mt-2 prose-slate dark:prose-invert">
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-										{@html processEntryHtml(
-											it.html || sanitize(String(marked.parse(it.content || '')))
-										)}
-									</div>
-								{/if}
-							</li>
+								<span class="text-xl">{getMoodEmoji(mood)}</span>
+							</button>
 						{/each}
-					</ul>
-					{#if totalPages > 1}
-						<div class="mt-4 flex items-center justify-between">
-							<div class="text-sm text-slate-600 dark:text-slate-400">
-								Showing {(currentPage - 1) * entriesPerPage + 1} to {Math.min(
-									currentPage * entriesPerPage,
-									shown.length
-								)} of {shown.length} entries
+					</div>
+
+					<button
+						onclick={updateFilters}
+						class="px-6 py-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 font-semibold rounded-lg transition-colors"
+					>
+						Apply
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Entries List -->
+		{#if data.entries.length === 0}
+			<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
+				<div class="text-6xl mb-4">📔</div>
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">No entries yet</h2>
+				<p class="text-gray-600 dark:text-gray-400 mb-6">
+					{data.filters.mood !== 'all' || data.filters.search
+						? 'No entries match your filters. Try adjusting your search.'
+						: 'Start your journaling journey by creating your first entry.'}
+				</p>
+				<a
+					href="/journal/new"
+					class="inline-block px-6 py-3 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 font-semibold rounded-lg transition-colors"
+				>
+					Create First Entry
+				</a>
+			</div>
+		{:else}
+			<div class="space-y-4">
+				{#each data.entries as entry (entry.id)}
+					<a
+						href="/journal/{entry.id}"
+						class="block bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-all p-6 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+					>
+						<div class="flex gap-4">
+							<!-- Mood Emoji -->
+							<div class="flex-shrink-0">
+								<span class="text-4xl">{getMoodEmoji(entry.mood)}</span>
 							</div>
-							<div class="flex gap-1">
-								<button
-									type="button"
-									class="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
-									disabled={currentPage === 1}
-									onclick={() => currentPage--}
-									aria-label="Previous page"
-								>
-									Previous
-								</button>
-								<span class="px-3 py-1 text-sm text-slate-600 dark:text-slate-400">
-									Page {currentPage} of {totalPages}
-								</span>
-								<button
-									type="button"
-									class="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
-									disabled={currentPage === totalPages}
-									onclick={() => currentPage++}
-									aria-label="Next page"
-								>
-									Next
-								</button>
+
+							<!-- Content -->
+							<div class="flex-1 min-w-0">
+								<div class="flex items-start justify-between gap-4 mb-2">
+									<h2 class="text-lg font-semibold text-gray-900 dark:text-white capitalize">
+										{entry.mood}
+									</h2>
+									<span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+										{formatRelativeTime(entry.createdAt)}
+									</span>
+								</div>
+								<p class="text-gray-700 dark:text-gray-300 line-clamp-3">
+									{entry.excerpt}
+								</p>
+							</div>
+
+							<!-- Arrow -->
+							<div class="flex-shrink-0 self-center">
+								<svg class="w-6 h-6 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+								</svg>
 							</div>
 						</div>
-					{/if}
-				{:else}
-					<div
-						class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
-					>
-						No entries yet.
-					</div>
-				{/if}
+					</a>
+				{/each}
 			</div>
-		</section>
+
+			<!-- Pagination -->
+			{#if data.pagination.totalPages > 1}
+				<div class="mt-8 flex justify-center items-center gap-2">
+					<button
+						onclick={() => goToPage(data.pagination.page - 1)}
+						disabled={data.pagination.page === 1}
+						class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						← Previous
+					</button>
+
+					<span class="px-4 py-2 text-gray-700 dark:text-gray-300">
+						Page {data.pagination.page} of {data.pagination.totalPages}
+					</span>
+
+					<button
+						onclick={() => goToPage(data.pagination.page + 1)}
+						disabled={data.pagination.page >= data.pagination.totalPages}
+						class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						Next →
+					</button>
+				</div>
+			{/if}
+		{/if}
 	</div>
-</main>
+</div>

@@ -1,4 +1,6 @@
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	let { children } = $props();
 </script>
 
@@ -8,17 +10,16 @@
 
 		<nav class="mb-6 flex gap-2 text-sm">
 			<a
-				href="/account/profile"
+				href={resolve('/account/profile')}
 				class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
 				>Profile</a
 			>
 			<a
-				href="/account/security"
+				href={resolve('/account/ai')}
 				class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-				>Security</a
+				>AI Companion</a
 			>
 		</nav>
-
 		{@render children?.()}
 	</div>
 </main>

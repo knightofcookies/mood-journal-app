@@ -1,67 +1,96 @@
-import type { PageServerLoad, Actions } from './$types';
+import type { PageServerLoad } from './$types';
 import { validateSessionToken } from '$lib/server/auth';
-import { redirect, json, fail } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import * as table from '$lib/server/db/schema';
-import { desc, eq } from 'drizzle-orm';
-import * as v from 'valibot';
-import { marked } from 'marked';
-import sanitizeHtml from 'sanitize-html';
+import { desc, eq, like, and } from 'drizzle-orm';
 
-export const load: PageServerLoad = async ({ cookies }) => {
+export const load: PageServerLoad = async ({ cookies, url }) => {
 	const token = cookies.get('auth-session');
 	const { user } = await validateSessionToken(token || '');
 	if (!user) throw redirect(303, '/auth/login');
-	const rows = await db
-		.select()
-		.from(table.entry)
-		.where(eq(table.entry.userId, user.id))
-		.orderBy(desc(table.entry.created_at))
-		.limit(20);
-	const entries = rows.map((entry) => ({
-		...entry,
-		html: sanitizeHtml(String(marked.parse(entry.content)), {
-			allowedTags: sanitizeHtml.defaults.allowedTags.concat(['audio', 'source']),
-			allowedAttributes: {
-				...sanitizeHtml.defaults.allowedAttributes,
-				audio: ['controls', 'src'],
-				source: ['src'],
-				img: ['src', 'alt', 'title', 'class']
-			}
-		})
-	}));
-	return { user, entries };
-};
-
-const CreateSchema = v.object({
-	content: v.pipe(v.string(), v.minLength(1)),
-	mood: v.string()
-});
-
-export const actions: Actions = {
-	create: async ({ request, cookies }) => {
-		const token = cookies.get('auth-session');
-		const { user } = await validateSessionToken(token || '');
-		if (!user) return fail(401, { error: 'unauthorized' });
-
-		const form = await request.formData();
-		const data = {
-			content: String(form.get('content') || ''),
-			mood: String(form.get('mood') || 'neutral')
-		};
-		const parsed = v.safeParse(CreateSchema, data);
-		if (!parsed.success) return fail(400, { error: 'invalid' });
-
-		const id = crypto.randomUUID();
-		const now = new Date();
-		await db.insert(table.entry).values({
-			id,
-			userId: user.id,
-			content: parsed.output.content,
-			mood: parsed.output.mood,
-			created_at: now,
-			updated_at: now
+	
+	// Get pagination and filter params
+	const page = parseInt(url.searchParams.get('page') || '1');
+	const limit = 20;
+	const offset = (page - 1) * limit;
+	const moodFilter = url.searchParams.get('mood') || 'all';
+	const searchQuery = url.searchParams.get('q') || '';
+	
+	try {
+		// Build query conditions
+		const conditions = [eq(table.entry.userId, user.id)];
+		
+		if (moodFilter !== 'all') {
+			conditions.push(eq(table.entry.mood, moodFilter));
+		}
+		
+		if (searchQuery.trim()) {
+			conditions.push(like(table.entry.content, `%${searchQuery}%`));
+		}
+		
+		// Get total count for pagination
+		const countResult = await db
+			.select()
+			.from(table.entry)
+			.where(and(...conditions));
+		
+		const totalEntries = countResult.length;
+		const totalPages = Math.ceil(totalEntries / limit);
+		
+		// Get entries with pagination
+		const rows = await db
+			.select()
+			.from(table.entry)
+			.where(and(...conditions))
+			.orderBy(desc(table.entry.createdAt))
+			.limit(limit)
+			.offset(offset);
+		
+		// Create excerpts for list view
+		const entries = rows.map((entry) => {
+			// Extract first 150 characters as excerpt
+			const plainText = entry.content.replace(/[#*`\[\]()]/g, '').trim();
+			const excerpt = plainText.length > 150 
+				? plainText.substring(0, 150) + '...' 
+				: plainText;
+			
+			return {
+				id: entry.id,
+				mood: entry.mood,
+				excerpt,
+				createdAt: entry.createdAt,
+				updatedAt: entry.updatedAt
+			};
 		});
-		return json({ ok: true, id });
+		
+		return { 
+			user, 
+			entries,
+			pagination: {
+				page,
+				totalPages,
+				totalEntries
+			},
+			filters: {
+				mood: moodFilter,
+				search: searchQuery
+			}
+		};
+	} catch (dbError) {
+		console.error('[journal] Database error loading entries:', dbError);
+		return { 
+			user, 
+			entries: [],
+			pagination: {
+				page: 1,
+				totalPages: 0,
+				totalEntries: 0
+			},
+			filters: {
+				mood: 'all',
+				search: ''
+			}
+		};
 	}
 };

@@ -60,7 +60,7 @@ const test = base.extend<{
 			// Cleanup
 			try {
 				process.kill(-serverProcess.pid!);
-			} catch (e) {
+			} catch {
 				// Server might already be stopped
 			}
 			if (fs.existsSync(TEST_DB_PATH)) {

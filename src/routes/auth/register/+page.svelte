@@ -1,4 +1,6 @@
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	let email = '';
 	let username = '';
 	let password = '';
@@ -53,7 +55,7 @@
 
 	<p class="text-center text-sm text-slate-600">
 		Already have an account? <a
-			href="/auth/login"
+			href={resolve('/auth/login')}
 			class="font-medium text-indigo-600 hover:text-indigo-700">Sign in</a
 		>
 	</p>

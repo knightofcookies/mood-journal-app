@@ -46,7 +46,7 @@ async function main() {
 	try {
 		const parsed = JSON.parse(regText);
 		console.log('Register response:', reg.status, JSON.stringify(parsed).slice(0, 200));
-	} catch (e) {
+	} catch {
 		console.log('Register response:', reg.status, regText.slice(0, 200));
 	}
 	await wait(300);
@@ -79,7 +79,7 @@ async function main() {
 		let body = bodyText;
 		try {
 			body = JSON.parse(bodyText);
-		} catch (e) {
+		} catch {
 			// keep raw
 		}
 		console.log(
@@ -119,7 +119,9 @@ async function main() {
 	let goodBody = goodText;
 	try {
 		goodBody = JSON.parse(goodText);
-	} catch (e) {}
+	} catch {
+		// ignore
+	}
 	console.log(
 		'Successful login response status:',
 		good.status,

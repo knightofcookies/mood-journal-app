@@ -18,9 +18,9 @@ export function generateSessionToken() {
 export async function createSession(token: string, userId: string) {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 	const session: table.Session = {
-		id: sessionId,
+		sessionToken: sessionId,
 		userId,
-		expiresAt: new Date(Date.now() + DAY_IN_MS * 30)
+		expires: new Date(Date.now() + DAY_IN_MS * 30)
 	};
 	await db.insert(table.session).values(session);
 	return session;
@@ -31,31 +31,31 @@ export async function validateSessionToken(token: string) {
 	const [result] = await db
 		.select({
 			// Keep selection compatible with older DBs without avatar_url
-			user: { id: table.user.id, username: table.user.username, email: table.user.email },
+			user: { id: table.user.id, username: table.user.username, email: table.user.email, avatarUrl: table.user.avatarUrl },
 			session: table.session
 		})
 		.from(table.session)
 		.innerJoin(table.user, eq(table.session.userId, table.user.id))
-		.where(eq(table.session.id, sessionId));
+		.where(eq(table.session.sessionToken, sessionId));
 
 	if (!result) {
 		return { session: null, user: null };
 	}
 	const { session, user } = result;
 
-	const sessionExpired = Date.now() >= session.expiresAt.getTime();
+	const sessionExpired = Date.now() >= session.expires.getTime();
 	if (sessionExpired) {
-		await db.delete(table.session).where(eq(table.session.id, session.id));
+		await db.delete(table.session).where(eq(table.session.sessionToken, session.sessionToken));
 		return { session: null, user: null };
 	}
 
-	const renewSession = Date.now() >= session.expiresAt.getTime() - DAY_IN_MS * 15;
+	const renewSession = Date.now() >= session.expires.getTime() - DAY_IN_MS * 15;
 	if (renewSession) {
-		session.expiresAt = new Date(Date.now() + DAY_IN_MS * 30);
+		session.expires = new Date(Date.now() + DAY_IN_MS * 30);
 		await db
 			.update(table.session)
-			.set({ expiresAt: session.expiresAt })
-			.where(eq(table.session.id, session.id));
+			.set({ expires: session.expires })
+			.where(eq(table.session.sessionToken, session.sessionToken));
 	}
 
 	return { session, user };
@@ -64,7 +64,7 @@ export async function validateSessionToken(token: string) {
 export type SessionValidationResult = Awaited<ReturnType<typeof validateSessionToken>>;
 
 export async function invalidateSession(sessionId: string) {
-	await db.delete(table.session).where(eq(table.session.id, sessionId));
+	await db.delete(table.session).where(eq(table.session.sessionToken, sessionId));
 }
 
 export function setSessionTokenCookie(event: RequestEvent, token: string, expiresAt: Date) {
@@ -72,7 +72,7 @@ export function setSessionTokenCookie(event: RequestEvent, token: string, expire
 		expires: expiresAt,
 		path: '/',
 		httpOnly: true,
-		secure: true,
+		secure: process.env.NODE_ENV === 'production',
 		sameSite: 'lax'
 	});
 }
@@ -86,9 +86,16 @@ export function deleteSessionTokenCookie(event: RequestEvent) {
 export async function registerUser(username: string, email: string, passwordHash: string) {
 	const id = crypto.randomUUID();
 	const now = new Date();
-	await db
-		.insert(table.user)
-		.values({ id, username, email, password_hash: passwordHash, created_at: now });
+	await db.insert(table.user).values({
+		id,
+		username,
+		email,
+		passwordHash,
+		createdAt: now,
+		updatedAt: now,
+		failedAttempts: 0,
+		lockedUntil: new Date(0)
+	});
 	return id;
 }
 
@@ -99,15 +106,15 @@ export async function verifyCredentials(email: string, passwordHash: string) {
 			id: table.user.id,
 			username: table.user.username,
 			email: table.user.email,
-			password_hash: table.user.password_hash,
-			failed_attempts: table.user.failed_attempts,
-			locked_until: table.user.locked_until
+			passwordHash: table.user.passwordHash,
+			failedAttempts: table.user.failedAttempts,
+			lockedUntil: table.user.lockedUntil
 		})
 		.from(table.user)
 		.where(eq(table.user.email, email));
 	if (!row) return null;
 	const { verify } = await import('argon2');
-	const ok = await verify(row.password_hash, passwordHash);
+	const ok = await verify(row.passwordHash, passwordHash);
 	if (!ok) return null;
 	return row;
 }

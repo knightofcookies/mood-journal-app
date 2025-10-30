@@ -7,7 +7,9 @@
 		root.toggle('dark', dark);
 		try {
 			localStorage.setItem('theme', dark ? 'dark' : 'light');
-		} catch {}
+		} catch {
+			// noop
+		}
 	}
 
 	if (typeof window !== 'undefined') {

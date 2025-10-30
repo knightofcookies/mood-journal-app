@@ -12,7 +12,7 @@ export async function POST({ request }) {
 			id: table.user.id,
 			username: table.user.username,
 			email: table.user.email,
-			created_at: table.user.created_at
+			created_at: table.user.createdAt
 		})
 		.from(table.user)
 		.where(eq(table.user.email, email));

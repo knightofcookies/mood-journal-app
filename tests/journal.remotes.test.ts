@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 // Minimal harness to call the remote functions directly
@@ -6,8 +7,11 @@ import * as data from '../src/routes/journal/data.remote';
 // Mock $app/server virtual module
 vi.mock('$app/server', () => ({
 	query: vi.fn((fn) => fn),
-	form: vi.fn((schema, fn) => fn),
+	form: vi.fn((_schema, fn) => fn),
 	getRequestEvent: vi.fn(() => ({
+		locals: {
+			user: { id: 'u1', username: 'test' }
+		},
 		cookies: {
 			get: (k: string) => (k === 'auth-session' ? 'test-token' : null)
 		},
@@ -35,13 +39,23 @@ const rows: any[] = [];
 vi.mock('../src/lib/server/db', async () => {
 	return {
 		db: {
-			insert: (tbl: any) => ({
+			insert: (_tbl: any) => ({
 				values: async (val: any) => {
 					rows.push(val);
 				}
 			}),
-			select: () => ({
-				from: () => ({ orderBy: () => ({ limit: () => Promise.resolve([...rows]) }) })
+			select: (_shape?: any) => ({
+				from: (_tbl?: any) => ({
+					orderBy: () => ({
+						limit: async () => Promise.resolve([...rows])
+					}),
+					innerJoin: () => ({
+						where: async () => []
+					}),
+					where: () => ({
+						limit: async () => []
+					})
+				})
 			})
 		}
 	};
@@ -50,12 +64,39 @@ vi.mock('../src/lib/server/db', async () => {
 // Mock schema objects used by the remote
 vi.mock('../src/lib/server/db/schema', async () => {
 	return {
-		entry: {}
+		entry: {
+			id: { __col: 'id' },
+			userId: { __col: 'userId' },
+			content: { __col: 'content' },
+			mood: { __col: 'mood' },
+			sentimentLabel: { __col: 'sentimentLabel' },
+			sentimentScore: { __col: 'sentimentScore' },
+			createdAt: { __col: 'createdAt' },
+			updatedAt: { __col: 'updatedAt' }
+		},
+		entryTag: {
+			entryId: { __col: 'entryId' },
+			tagId: { __col: 'tagId' },
+			createdAt: { __col: 'createdAt' }
+		},
+		tag: {
+			id: { __col: 'id' },
+			name: { __col: 'name' },
+			type: { __col: 'type' },
+			createdAt: { __col: 'createdAt' }
+		},
+		aiSettings: {
+			userId: { __col: 'userId' }
+		}
 	};
 });
 
-// Mock drizzle desc
-vi.mock('drizzle-orm', async () => ({ desc: (x: any) => x }));
+// Mock drizzle helpers
+vi.mock('drizzle-orm', async () => ({
+	desc: (x: any) => x,
+	eq: (..._args: any[]) => true,
+	inArray: (..._args: any[]) => true
+}));
 
 describe('journal remotes', () => {
 	beforeAll(() => {
