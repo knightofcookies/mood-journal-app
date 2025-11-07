@@ -7,7 +7,6 @@
 
 	let searchQuery = $state('');
 	let selectedTags = $state<string[]>([]);
-	let selectedMood = $state('all');
 	let sentimentFilter = $state<'all' | 'positive' | 'neutral' | 'negative'>('all');
 	let dateOrder = $state<'desc' | 'asc'>('desc');
 
@@ -54,11 +53,6 @@
 	const filteredEntries = $derived.by(() => {
 		let results = data.entries;
 
-		// Mood filter
-		if (selectedMood !== 'all') {
-			results = results.filter((e) => e.mood === selectedMood);
-		}
-
 		// Sentiment filter
 		if (sentimentFilter === 'positive') {
 			results = results.filter((e) => (e.sentimentScore ?? 0) > 0);
@@ -100,7 +94,6 @@
 	function clearFilters() {
 		searchQuery = '';
 		selectedTags = [];
-		selectedMood = 'all';
 		sentimentFilter = 'all';
 	}
 
@@ -143,7 +136,6 @@
 
 	const activeFilterCount = $derived(
 		(selectedTags.length > 0 ? 1 : 0) +
-			(selectedMood !== 'all' ? 1 : 0) +
 			(sentimentFilter !== 'all' ? 1 : 0) +
 			(searchQuery.length > 0 ? 1 : 0)
 	);
@@ -156,23 +148,23 @@
 <div class="mx-auto max-w-6xl space-y-6 p-6">
 	<!-- Header -->
 	<div class="mb-8">
-		<h1 class="mb-2 text-3xl font-bold text-gray-900 dark:text-white">🔍 Search Your Journal</h1>
-		<p class="text-gray-600 dark:text-gray-400">
-			Find entries by keywords, mood, sentiment, or tags
+		<h1 class="mb-2 text-3xl font-bold text-foreground">🔍 Search Your Journal</h1>
+		<p class="text-muted-foreground">
+			Find entries by keywords, sentiment, or tags
 		</p>
 	</div>
 
 	<!-- Search Box -->
-	<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+	<div class="rounded-lg bg-card border p-6 shadow">
 		<div class="relative">
 			<input
 				type="text"
 				bind:value={searchQuery}
 				placeholder="Search your journal... (e.g., 'work stress', 'weekend fun', 'family dinner')"
-				class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 pr-4 pl-12 text-lg text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+				class="w-full rounded-lg border bg-background px-4 py-3 pr-4 pl-12 text-lg text-foreground focus:border-transparent focus:ring-2 focus:ring-ring"
 			/>
 			<svg
-				class="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-gray-400"
+				class="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-muted-foreground"
 				fill="none"
 				stroke="currentColor"
 				viewBox="0 0 24 24"
@@ -188,58 +180,32 @@
 	</div>
 
 	<!-- Filters -->
-	<div class="space-y-4 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+	<div class="space-y-4 rounded-lg bg-card border p-6 shadow">
 		<div class="mb-4 flex items-center justify-between">
-			<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
+			<h3 class="text-lg font-semibold text-foreground">Filters</h3>
 			{#if activeFilterCount > 0}
 				<button
 					onclick={clearFilters}
-					class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+					class="text-sm text-primary hover:text-primary/80"
 				>
 					Clear all ({activeFilterCount})
 				</button>
 			{/if}
 		</div>
 
-		<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-			<!-- Mood Filter -->
-			<div>
-				<label
-					for="mood-select"
-					class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-				>
-					Mood
-				</label>
-				<select
-					id="mood-select"
-					bind:value={selectedMood}
-					class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-				>
-					<option value="all">All Moods</option>
-					<option value="happy">😊 Happy</option>
-					<option value="neutral">😐 Neutral</option>
-					<option value="sad">😢 Sad</option>
-					<option value="anxious">😰 Anxious</option>
-					<option value="excited">🤩 Excited</option>
-					<option value="calm">😌 Calm</option>
-					<option value="stressed">😫 Stressed</option>
-					<option value="angry">😠 Angry</option>
-					<option value="other">🤔 Other</option>
-				</select>
-			</div>
-
+		<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 			<!-- Sentiment Filter -->
 			<div>
 				<label
 					for="sentiment-select"
-					class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+					class="mb-2 block text-sm font-medium text-foreground"
 				>
 					Sentiment
 				</label>
 				<select
 					id="sentiment-select"
 					bind:value={sentimentFilter}
-					class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+					class="w-full rounded-lg border bg-background px-3 py-2 text-foreground"
 				>
 					<option value="all">All Sentiments</option>
 					<option value="positive">Positive</option>
@@ -252,14 +218,14 @@
 			<div>
 				<label
 					for="date-select"
-					class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+					class="mb-2 block text-sm font-medium text-foreground"
 				>
 					Sort By Date
 				</label>
 				<select
 					id="date-select"
 					bind:value={dateOrder}
-					class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+					class="w-full rounded-lg border bg-background px-3 py-2 text-foreground"
 				>
 					<option value="desc">Newest First</option>
 					<option value="asc">Oldest First</option>
@@ -270,7 +236,7 @@
 		<!-- Tag Filter -->
 		{#if data.tags.length > 0}
 			<div>
-				<h3 class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+				<h3 class="mb-2 block text-sm font-medium text-foreground">
 					Filter by Tags
 				</h3>
 				<div class="flex flex-wrap gap-2">
@@ -280,8 +246,8 @@
 							class="rounded-full px-3 py-1 text-sm transition-colors {selectedTags.includes(
 								tag.name
 							)
-								? 'bg-blue-600 text-white'
-								: 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}"
+								? 'bg-primary text-primary-foreground'
+								: 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}"
 							type="button"
 						>
 							{tag.type === 'keyword' ? '🔑' : '🏷️'}
@@ -294,9 +260,9 @@
 	</div>
 
 	<!-- Results -->
-	<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+	<div class="rounded-lg bg-card border p-6 shadow">
 		<div class="mb-4 flex items-center justify-between">
-			<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+			<h3 class="text-lg font-semibold text-foreground">
 				Results ({filteredEntries.length})
 			</h3>
 		</div>
@@ -304,7 +270,7 @@
 		{#if filteredEntries.length === 0}
 			<div class="py-12 text-center">
 				<div class="mb-4 text-6xl">🔍</div>
-				<p class="text-lg text-gray-600 dark:text-gray-400">
+				<p class="text-lg text-muted-foreground">
 					{searchQuery || activeFilterCount > 0
 						? 'No entries match your search'
 						: 'Start searching your journal'}
@@ -314,37 +280,16 @@
 			<div class="space-y-4">
 				{#each filteredEntries as entry}
 					<div
-						class="rounded-lg border border-gray-200 p-4 transition-shadow hover:shadow-md dark:border-gray-700"
+						class="rounded-lg border p-4 transition-shadow hover:shadow-md"
 					>
 						<div class="mb-2 flex items-start justify-between">
 							<div class="flex items-center gap-3">
-								<span class="text-2xl"
-									>{entry.mood === 'happy'
-										? '😊'
-										: entry.mood === 'sad'
-											? '😢'
-											: entry.mood === 'anxious'
-												? '😰'
-												: entry.mood === 'excited'
-													? '🤩'
-													: entry.mood === 'calm'
-														? '😌'
-														: entry.mood === 'stressed'
-															? '😫'
-															: entry.mood === 'angry'
-																? '😠'
-																: entry.mood === 'other'
-																	? '🤔'
-																	: '😐'}</span
-								>
 								<div>
-									<div class="font-medium text-gray-900 dark:text-white">
+									<div class="font-medium text-foreground">
 										{formatDate(entry.createdAt)}
 									</div>
-									<div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-										<span class="capitalize">{entry.mood}</span>
+									<div class="flex items-center gap-2 text-sm text-muted-foreground">
 										{#if entry.sentimentScore !== null}
-											<span>•</span>
 											<span>
 												{getSentimentEmoji(entry.sentimentScore)}
 												{entry.sentimentScore > 0 ? '+' : ''}{entry.sentimentScore}
@@ -355,7 +300,7 @@
 							</div>
 						</div>
 						<div class="prose mt-3 max-w-none dark:prose-invert">
-							<div class="line-clamp-3 text-gray-700 dark:text-gray-300" use:safeHtml={highlightText(
+							<div class="line-clamp-3 text-foreground" use:safeHtml={highlightText(
 								entry.content.substring(0, 300) + (entry.content.length > 300 ? '...' : ''),
 								searchQuery
 							)}>
@@ -364,7 +309,7 @@
 						<div class="mt-3">
 							<a
 								href="/journal#{entry.id}"
-								class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+								class="text-sm font-medium text-primary hover:text-primary/80"
 							>
 								View full entry →
 							</a>
@@ -379,7 +324,7 @@
 	<div>
 		<a
 			href="/journal"
-			class="inline-flex items-center gap-2 rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-900 transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+			class="inline-flex items-center gap-2 rounded-lg bg-secondary px-6 py-3 font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
 		>
 			← Back to Journal
 		</a>

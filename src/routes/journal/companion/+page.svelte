@@ -25,47 +25,11 @@
 	});
 
 	// Check if AI is properly configured
-	const isConfigured = $derived(
-		data.settings?.ai_enabled && data.settings?.privacy_consent && data.settings?.has_api_key
-	);
+	const isConfigured = $derived(data.hasApiKey);
 
-	// Format provider and model display
-	function getProviderDisplay(provider?: string): string {
-		switch (provider?.toLowerCase()) {
-			case 'openai':
-				return 'OpenAI';
-			case 'groq':
-				return 'Groq';
-			case 'gemini':
-				return 'Google Gemini';
-			case 'local':
-				return 'Local (Ollama)';
-			default:
-				return 'OpenAI';
-		}
-	}
-
-	function getModelDisplay(model?: string, provider?: string): string {
-		// If model is provided, use it
-		if (model) {
-			// Clean up model names for display
-			return model.replace('gpt-', 'GPT-').replace('llama', 'Llama').replace('gemini-', 'Gemini ');
-		}
-
-		// Otherwise, show the default for this provider
-		switch (provider?.toLowerCase()) {
-			case 'openai':
-				return 'GPT-4o mini (default)';
-			case 'groq':
-				return 'Llama 3 8B (default)';
-			case 'gemini':
-				return 'Gemini 1.5 Flash (default)';
-			case 'local':
-				return 'llama3.2:3b (default)';
-			default:
-				return 'GPT-4o mini (default)';
-		}
-	}
+	// Model info - fixed to Groq llama-3.1-8b-instant
+	const providerDisplay = 'Groq';
+	const modelDisplay = 'Llama 3.1 8B Instant';
 
 	function formatTime(timestamp: Date | number): string {
 		const date = typeof timestamp === 'number' ? new Date(timestamp) : timestamp;
@@ -85,12 +49,9 @@
 					provide personalized insights.
 				{/if}
 			</p>
-			{#if isConfigured && data.settings}
+			{#if isConfigured}
 				<p class="text-muted-foreground mt-1 text-xs">
-					Using {getProviderDisplay(data.settings.provider)} • {getModelDisplay(
-						data.settings.model,
-						data.settings.provider
-					)}
+					Using {providerDisplay} • {modelDisplay}
 				</p>
 			{/if}
 		</div>
@@ -125,45 +86,24 @@
 			</CardHeader>
 			<CardContent class="space-y-4">
 				<p class="text-muted-foreground">
-					The AI companion needs to be configured before you can start chatting.
+					The AI companion requires a Groq API key to be configured in your environment.
 				</p>
 				<div class="space-y-2 text-sm">
 					<div class="flex items-center gap-2">
-						{#if data.settings?.ai_enabled}
+						{#if data.hasApiKey}
 							<span class="text-green-600">✓</span>
 						{:else}
 							<span class="text-red-600">✗</span>
 						{/if}
-						<span>AI companion enabled</span>
-					</div>
-					<div class="flex items-center gap-2">
-						{#if data.settings?.privacy_consent}
-							<span class="text-green-600">✓</span>
-						{:else}
-							<span class="text-red-600">✗</span>
-						{/if}
-						<span>Privacy consent accepted</span>
-					</div>
-					<div class="flex items-center gap-2">
-						{#if data.settings?.has_api_key}
-							<span class="text-green-600">✓</span>
-						{:else}
-							<span class="text-red-600">✗</span>
-						{/if}
-						<span>
-							{#if data.settings?.provider === 'local'}
-								Model configured (local)
-							{:else if data.settings?.provider === 'groq'}
-								Groq API key configured
-							{:else if data.settings?.provider === 'gemini'}
-								Gemini API key configured
-							{:else}
-								OpenAI API key configured
-							{/if}
-						</span>
+						<span>Groq API key configured</span>
 					</div>
 				</div>
-				<Button href="/account/ai">Configure AI Settings</Button>
+				{#if !data.hasApiKey}
+					<p class="text-muted-foreground text-sm">
+						Please add your <code>GROQ_API_KEY</code> to the <code>.env</code> file and restart the
+						server.
+					</p>
+				{/if}
 			</CardContent>
 		</Card>
 	{:else}
@@ -181,7 +121,7 @@
 									I'm here to help you reflect on your journal entries and mood patterns.
 								</p>
 							</div>
-							<div class="space-y-2 rounded-lg bg-blue-50 p-4 text-left text-sm dark:bg-blue-950">
+							<div class="space-y-2 rounded-lg bg-blue-50 p-4 text-left text-sm dark:bg-blue-950/50">
 								<p class="font-medium">💡 You can ask me about:</p>
 								<ul class="text-muted-foreground space-y-1">
 									<li>• Patterns you've noticed in your mood</li>
@@ -199,8 +139,8 @@
 						<div class="flex {msg.role === 'user' ? 'justify-end' : 'justify-start'}">
 							<div
 								class="max-w-[80%] rounded-lg px-4 py-2 {msg.role === 'user'
-									? 'bg-blue-600 text-white'
-									: 'bg-gray-100 dark:bg-gray-800'}"
+									? 'bg-primary text-primary-foreground'
+									: 'bg-secondary text-secondary-foreground'}"
 							>
 								<div class="flex items-start gap-2">
 									<span class="text-lg">{msg.role === 'user' ? '🧑' : '🤖'}</span>
@@ -208,7 +148,7 @@
 										<p class="text-sm whitespace-pre-wrap">{msg.content}</p>
 										<p
 											class="mt-1 text-xs {msg.role === 'user'
-												? 'text-blue-100'
+												? 'text-primary-foreground/80'
 												: 'text-muted-foreground'}"
 										>
 											{formatTime(msg.created_at)}
@@ -222,7 +162,7 @@
 					<!-- Show loading indicator when sending -->
 					{#if sending}
 						<div class="flex justify-start">
-							<div class="max-w-[80%] rounded-lg bg-gray-100 px-4 py-2 dark:bg-gray-800">
+							<div class="max-w-[80%] rounded-lg bg-secondary px-4 py-2 text-secondary-foreground">
 								<div class="flex items-start gap-2">
 									<span class="text-lg">🤖</span>
 									<div class="flex-1">
@@ -308,12 +248,12 @@
 				</div>
 				<p class="text-muted-foreground mt-2 text-xs">
 					💡 Press <kbd
-						class="rounded border bg-gray-100 px-1.5 py-0.5 text-xs font-semibold dark:bg-gray-800"
+						class="rounded border bg-secondary px-1.5 py-0.5 text-xs font-semibold"
 						>Enter</kbd
 					>
 					to send,
 					<kbd
-						class="rounded border bg-gray-100 px-1.5 py-0.5 text-xs font-semibold dark:bg-gray-800"
+						class="rounded border bg-secondary px-1.5 py-0.5 text-xs font-semibold"
 						>Shift+Enter</kbd
 					> for new line
 				</p>

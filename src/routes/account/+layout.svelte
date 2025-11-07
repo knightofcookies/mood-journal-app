@@ -14,11 +14,6 @@
 				class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
 				>Profile</a
 			>
-			<a
-				href={resolve('/account/ai')}
-				class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-				>AI Companion</a
-			>
 		</nav>
 		{@render children?.()}
 	</div>

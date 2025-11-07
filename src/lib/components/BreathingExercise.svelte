@@ -119,13 +119,13 @@
 	});
 </script>
 
-<div class="breathing-exercise flex flex-col items-center space-y-8 rounded-xl bg-white p-8 shadow-lg dark:bg-gray-800">
+<div class="breathing-exercise flex flex-col items-center space-y-8 rounded-xl bg-card border p-8 shadow-lg">
 	<!-- Exercise Info -->
 	<div class="text-center">
-		<h3 class="text-2xl font-bold text-gray-900 dark:text-white">
+		<h3 class="text-2xl font-bold text-foreground">
 			{currentExercise.name}
 		</h3>
-		<p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+		<p class="mt-1 text-sm text-muted-foreground">
 			{currentExercise.description}
 		</p>
 	</div>
@@ -170,8 +170,8 @@
 	<!-- Cycle Counter -->
 	{#if isActive}
 		<div class="text-center">
-			<div class="text-sm text-gray-500 dark:text-gray-400">Completed Cycles</div>
-			<div class="text-3xl font-bold text-gray-900 dark:text-white">{cycleCount}</div>
+			<div class="text-sm text-muted-foreground">Completed Cycles</div>
+			<div class="text-3xl font-bold text-foreground">{cycleCount}</div>
 		</div>
 	{/if}
 
@@ -180,7 +180,7 @@
 		{#if !isActive}
 			<button
 				onclick={startExercise}
-				class="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-blue-700"
+				class="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
 			>
 				<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
 					<path
@@ -194,7 +194,7 @@
 		{:else}
 			<button
 				onclick={stopExercise}
-				class="flex items-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-red-700"
+				class="flex items-center gap-2 rounded-lg bg-destructive px-6 py-3 font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90"
 			>
 				<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
 					<path
@@ -210,9 +210,9 @@
 
 	<!-- Instructions -->
 	{#if !isActive}
-		<div class="w-full rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-900">
-			<h4 class="mb-2 font-semibold text-gray-900 dark:text-white">How it works:</h4>
-			<ol class="space-y-1 text-gray-600 dark:text-gray-400">
+		<div class="w-full rounded-lg bg-secondary p-4 text-sm">
+			<h4 class="mb-2 font-semibold text-foreground">How it works:</h4>
+			<ol class="space-y-1 text-muted-foreground">
 				{#if exercise === 'box'}
 					<li>1. Breathe in for 4 seconds</li>
 					<li>2. Hold for 4 seconds</li>

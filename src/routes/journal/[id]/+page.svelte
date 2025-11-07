@@ -15,69 +15,10 @@
 
 	let editing = $state(false);
 	let editContent = $state(data.entry.content);
-	let editMood = $state(data.entry.mood);
 	let uploading = $state(false);
 	let deleting = $state(false);
 	let dragOver = $state(false);
 
-	// NLP Analysis state
-	let analyzing = $state(false);
-	let showAnalysis = $state(false);
-	let analysis = $state<{
-		distortions: Array<{
-			type: string;
-			label: string;
-			confidence: number;
-			excerpt: string;
-			explanation: string;
-		}>;
-		reframes: string[];
-		socratics: string[];
-		positiveAnchors: string[];
-	} | null>(null);
-
-	async function analyzeEntry() {
-		analyzing = true;
-		try {
-			const res = await fetch('/api/nlp/analyze', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					entryId: data.entry.id,
-					text: data.entry.content
-				})
-			});
-
-			if (!res.ok) {
-				throw new Error('Analysis failed');
-			}
-
-			const result = await res.json();
-			analysis = result.analysis;
-			showAnalysis = true;
-		} catch (err) {
-			console.error('Analysis error:', err);
-			alert('Failed to analyze entry. Please try again.');
-		} finally {
-			analyzing = false;
-		}
-	}
-
-	async function sendFeedback(distortionType: string, accepted: boolean) {
-		try {
-			await fetch('/api/nlp/analyze', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					entryId: data.entry.id,
-					distortionType,
-					accepted
-				})
-			});
-		} catch (err) {
-			console.error('Feedback error:', err);
-		}
-	}
 
 	function sanitize(html: string) {
 		if (browser && Purify?.sanitize) {
@@ -109,17 +50,6 @@
 			hour: '2-digit',
 			minute: '2-digit'
 		});
-	}
-
-	function getMoodEmoji(mood: string) {
-		const emojis: Record<string, string> = {
-			happy: '😊',
-			neutral: '😐',
-			sad: '😢',
-			anxious: '😰',
-			excited: '🤩'
-		};
-		return emojis[mood] || '😐';
 	}
 
 	function getSentimentEmoji(score: number): string {
@@ -270,7 +200,6 @@
 	function cancelEdit() {
 		editing = false;
 		editContent = data.entry.content;
-		editMood = data.entry.mood;
 	}
 </script>
 
@@ -351,33 +280,11 @@
 						if (result.type === 'success') {
 							editing = false;
 							data.entry.content = editContent;
-							data.entry.mood = editMood;
 						}
 					};
 				}}
 			>
 				<div class="mb-6 overflow-hidden rounded-xl bg-white shadow-lg dark:bg-gray-800">
-					<!-- Mood Selector -->
-					<div class="border-b border-gray-200 p-6 dark:border-gray-700">
-						<div class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">Mood</div>
-						<div class="flex gap-3">
-							{#each ['happy', 'neutral', 'sad', 'anxious', 'excited'] as m}
-								<button
-									type="button"
-									onclick={() => (editMood = m)}
-									class="flex flex-col items-center gap-1 rounded-lg border-2 p-2 transition-all {editMood ===
-									m
-										? 'border-gray-900 bg-gray-100 dark:border-white dark:bg-gray-800'
-										: 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'}"
-								>
-									<span class="text-2xl">{getMoodEmoji(m)}</span>
-									<span class="text-xs font-medium capitalize">{m}</span>
-								</button>
-							{/each}
-						</div>
-						<input type="hidden" name="mood" value={editMood} />
-					</div>
-
 					<!-- Editor Toolbar -->
 					<div class="border-b border-gray-200 p-4 dark:border-gray-700">
 						<div class="flex flex-wrap gap-2">
@@ -494,11 +401,7 @@
 				<div class="border-b border-gray-200 p-6 dark:border-gray-700">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-4">
-							<span class="text-4xl">{getMoodEmoji(data.entry.mood)}</span>
 							<div>
-								<h1 class="text-2xl font-bold text-gray-900 capitalize dark:text-white">
-									{data.entry.mood}
-								</h1>
 								<p class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
 									<span>{formatDate(data.entry.createdAt)}</span>
 									{#if data.entry.sentimentScore !== null && data.entry.sentimentScore !== undefined}
@@ -556,163 +459,6 @@
 						</div>
 					</div>
 				{/if}
-
-				<!-- Cognitive Distortion Analysis Section -->
-				<div class="border-t border-gray-200 p-6 dark:border-gray-700">
-					{#if !showAnalysis}
-						<button
-							onclick={analyzeEntry}
-							disabled={analyzing}
-							class="flex items-center gap-2 rounded-lg bg-purple-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-purple-700 disabled:bg-purple-400"
-						>
-							{#if analyzing}
-								<span
-									class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-								></span>
-								Analyzing...
-							{:else}
-								🧠 Detect Cognitive Distortions & Reframe
-							{/if}
-						</button>
-						<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-							Use AI to identify cognitive distortions and get CBT-based reframing suggestions
-						</p>
-					{:else if analysis}
-						<div class="space-y-6">
-							<div class="flex items-center justify-between">
-								<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-									🧠 Cognitive Analysis
-								</h3>
-								<button
-									onclick={() => {
-										showAnalysis = false;
-										analysis = null;
-									}}
-									class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-								>
-									Hide
-								</button>
-							</div>
-
-							{#if analysis.distortions.length > 0}
-								<div class="space-y-4">
-									<h4 class="font-medium text-gray-800 dark:text-gray-200">Detected Patterns:</h4>
-									{#each analysis.distortions as distortion}
-										<div
-											class="rounded-lg border-l-4 border-orange-400 bg-orange-50 p-4 dark:bg-orange-900/20"
-										>
-											<div class="flex items-start justify-between">
-												<div class="flex-1">
-													<div class="mb-2 flex items-center gap-2">
-														<span class="font-semibold text-orange-800 dark:text-orange-300">
-															{distortion.label}
-														</span>
-														<span
-															class="rounded-full bg-orange-200 px-2 py-0.5 text-xs text-orange-800 dark:bg-orange-800 dark:text-orange-200"
-														>
-															{Math.round(distortion.confidence * 100)}% confidence
-														</span>
-													</div>
-													<p class="mb-2 text-sm text-gray-700 dark:text-gray-300">
-														{distortion.explanation}
-													</p>
-													{#if distortion.excerpt}
-														<p class="text-sm text-gray-600 italic dark:text-gray-400">
-															"{distortion.excerpt.slice(0, 150)}{distortion.excerpt.length > 150
-																? '...'
-																: ''}"
-														</p>
-													{/if}
-												</div>
-												<div class="ml-4 flex gap-2">
-													<button
-														onclick={() => sendFeedback(distortion.type, true)}
-														class="rounded bg-green-100 px-2 py-1 text-xs text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50"
-														title="Accurate"
-													>
-														✓
-													</button>
-													<button
-														onclick={() => sendFeedback(distortion.type, false)}
-														class="rounded bg-red-100 px-2 py-1 text-xs text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
-														title="Not accurate"
-													>
-														✗
-													</button>
-												</div>
-											</div>
-										</div>
-									{/each}
-								</div>
-
-								{#if analysis.reframes.length > 0}
-									<div class="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
-										<h4 class="mb-3 font-medium text-blue-900 dark:text-blue-200">
-											💡 Reframing Suggestions:
-										</h4>
-										<ul class="space-y-2">
-											{#each analysis.reframes as reframe}
-												<li class="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
-													<span class="mt-0.5 text-blue-600 dark:text-blue-400">•</span>
-													<span>{reframe}</span>
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-
-								{#if analysis.socratics.length > 0}
-									<div class="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
-										<h4 class="mb-3 font-medium text-purple-900 dark:text-purple-200">
-											🤔 Questions to Consider:
-										</h4>
-										<ul class="space-y-2">
-											{#each analysis.socratics as question}
-												<li class="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
-													<span class="mt-0.5 text-purple-600 dark:text-purple-400">•</span>
-													<span>{question}</span>
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-
-								{#if analysis.positiveAnchors.length > 0}
-									<div class="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-										<h4 class="mb-3 font-medium text-green-900 dark:text-green-200">
-											✨ Positive Evidence Found:
-										</h4>
-										<ul class="space-y-2">
-											{#each analysis.positiveAnchors as anchor}
-												<li class="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
-													<span class="mt-0.5 text-green-600 dark:text-green-400">•</span>
-													<span>"{anchor}"</span>
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-							{:else}
-								<div class="rounded-lg bg-green-50 p-4 text-center dark:bg-green-900/20">
-									<p class="text-green-800 dark:text-green-300">
-										✨ No significant cognitive distortions detected in this entry!
-									</p>
-									<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-										This is a healthy reflection with balanced thinking patterns.
-									</p>
-								</div>
-							{/if}
-
-							<button
-								onclick={analyzeEntry}
-								disabled={analyzing}
-								class="text-sm text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
-							>
-								{analyzing ? 'Re-analyzing...' : '🔄 Re-analyze'}
-							</button>
-						</div>
-					{/if}
-				</div>
 			</article>
 		{/if}
 	</div>

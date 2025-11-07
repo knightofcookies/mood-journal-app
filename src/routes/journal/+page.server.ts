@@ -14,17 +14,12 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 	const page = parseInt(url.searchParams.get('page') || '1');
 	const limit = 20;
 	const offset = (page - 1) * limit;
-	const moodFilter = url.searchParams.get('mood') || 'all';
 	const searchQuery = url.searchParams.get('q') || '';
 	const tagFilter = url.searchParams.get('tag') || '';
 
 	try {
 		// Build query conditions
 		const conditions = [eq(table.entry.userId, user.id)];
-
-		if (moodFilter !== 'all') {
-			conditions.push(eq(table.entry.mood, moodFilter));
-		}
 
 		if (searchQuery.trim()) {
 			conditions.push(like(table.entry.content, `%${searchQuery}%`));
@@ -53,7 +48,6 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 						totalEntries: 0
 					},
 					filters: {
-						mood: moodFilter,
 						search: searchQuery,
 						tag: tagFilter
 					},
@@ -147,7 +141,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 
 			return {
 				id: entry.id,
-				mood: entry.mood,
+				mood: entry.mood || 'neutral',
 				excerpt,
 				createdAt: entry.createdAt,
 				updatedAt: entry.updatedAt,
@@ -166,7 +160,6 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 				totalEntries
 			},
 			filters: {
-				mood: moodFilter,
 				search: searchQuery,
 				tag: tagFilter
 			},
@@ -183,7 +176,6 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 				totalEntries: 0
 			},
 			filters: {
-				mood: 'all',
 				search: '',
 				tag: ''
 			},

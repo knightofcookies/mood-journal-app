@@ -17,7 +17,6 @@
 
 	// Form state
 	let content = $state('');
-	// Note: mood is now auto-generated from NLP sentiment analysis, not user input
 	let attachments = $state<Array<{ url: string; type: string }>>([]);
 	let uploading = $state(false);
 	let submitting = $state(false);
@@ -50,7 +49,6 @@
 				// Only restore if it's recent (within 24 hours)
 				if (Date.now() - draft.timestamp < 24 * 60 * 60 * 1000) {
 					content = draft.content || '';
-					// mood is now auto-generated from sentiment, not restored from draft
 				} else {
 						localStorage.removeItem(AUTOSAVE_KEY);
 					}
@@ -295,13 +293,13 @@
 			<div class="mb-4 flex items-center gap-4">
 				<a
 					href="/journal"
-					class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+					class="text-muted-foreground hover:text-foreground"
 				>
 					← Back to Journal
 				</a>
 			</div>
-			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">New Entry</h1>
-			<p class="mt-2 text-gray-600 dark:text-gray-400">Write your thoughts for today</p>
+			<h1 class="text-3xl font-bold text-foreground">New Entry</h1>
+			<p class="mt-2 text-muted-foreground">Write your thoughts for today</p>
 		</div>
 
 		{#if form?.error}
@@ -318,19 +316,6 @@
 					await update();
 					submitting = false;
 					clearDraft();
-					
-					// Show achievement notifications if any were unlocked
-					if (result.type === 'success' && result.data?.newlyUnlocked) {
-						for (const achievement of result.data.newlyUnlocked) {
-							achievementNotifications.addNotification({
-								id: achievement.id,
-								title: achievement.title,
-								description: achievement.description,
-								icon: achievement.icon,
-								xp: achievement.xp
-							});
-						}
-					}
 				};
 			}}
 		>
@@ -338,34 +323,34 @@
 				<!-- Editor Section -->
 				<div class="space-y-6">
 					<!-- Journaling Prompt -->
-					<div class="rounded-xl bg-white p-6 shadow-lg dark:bg-gray-800">
+					<div class="rounded-xl bg-card border p-6 shadow-lg">
 						<div class="mb-4 flex items-center justify-between">
-							<h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+							<h2 class="text-lg font-semibold text-foreground">
 								Need Inspiration?
 							</h2>
 							<button
 								type="button"
 								onclick={getPrompt}
-								class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700"
+								class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
 							>
 								Get Prompt
 							</button>
 						</div>
 						{#if showPrompts && currentPrompt}
 							<div class="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
-								<p class="mb-3 text-gray-700 dark:text-gray-300">{currentPrompt}</p>
+								<p class="mb-3 text-foreground">{currentPrompt}</p>
 								<div class="flex gap-2">
 									<button
 										type="button"
 										onclick={usePrompt}
-										class="rounded bg-purple-600 px-3 py-1 text-sm text-white hover:bg-purple-700"
+										class="rounded bg-purple-600 px-3 py-1 text-sm text-white hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
 									>
 										Use This
 									</button>
 									<button
 										type="button"
 										onclick={getPrompt}
-										class="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+										class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									>
 										Get Another
 									</button>
@@ -375,58 +360,21 @@
 					</div>
 
 					<!-- Template Selector -->
-					<div class="rounded-xl bg-white p-6 shadow-lg dark:bg-gray-800">
-						<h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+					<div class="rounded-xl bg-card border p-6 shadow-lg">
+						<h2 class="mb-4 text-lg font-semibold text-foreground">
 							Start with a Template
 						</h2>
 						<TemplateSelector onSelectTemplate={handleTemplateSelect} />
 					</div>
 
-					<!-- Mood Selector - DISABLED: Mood is now auto-detected by NLP sentiment analysis -->
-					<!--
-					<div class="rounded-xl bg-white p-6 shadow-lg dark:bg-gray-800">
-						<div class="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">
-							How are you feeling?
-						</div>
-						<div class="grid grid-cols-3 gap-3 sm:grid-cols-5">
-							{#each [
-								{ value: 'happy', emoji: '😊' },
-								{ value: 'neutral', emoji: '😐' },
-								{ value: 'sad', emoji: '😢' },
-								{ value: 'anxious', emoji: '😰' },
-								{ value: 'excited', emoji: '🤩' },
-								{ value: 'calm', emoji: '😌' },
-								{ value: 'stressed', emoji: '😫' },
-								{ value: 'angry', emoji: '😠' },
-								{ value: 'other', emoji: '🤔' }
-							] as moodOption}
-								<button
-									type="button"
-									onclick={() => (mood = moodOption.value)}
-									class="flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all {mood ===
-									moodOption.value
-										? 'border-gray-900 bg-gray-100 dark:border-white dark:bg-gray-800'
-										: 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'}"
-								>
-									<span class="text-3xl">{moodOption.emoji}</span>
-									<span class="text-xs font-medium text-gray-700 capitalize dark:text-gray-300"
-										>{moodOption.value}</span
-									>
-								</button>
-							{/each}
-						</div>
-						<input type="hidden" name="mood" value={mood} />
-					</div>
-					-->
-
 					<!-- Editor -->
-					<div class="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-gray-800">
-						<div class="border-b border-gray-200 p-4 dark:border-gray-700">
+					<div class="overflow-hidden rounded-xl bg-card border shadow-lg">
+						<div class="border-b p-4">
 							<div class="flex flex-wrap gap-2">
 								<button
 									type="button"
 									onclick={() => wrapSelection('**')}
-									class="rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="Bold (Cmd+B)"
 								>
 									<strong>B</strong>
@@ -434,7 +382,7 @@
 								<button
 									type="button"
 									onclick={() => wrapSelection('*')}
-									class="rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="Italic (Cmd+I)"
 								>
 									<em>I</em>
@@ -442,7 +390,7 @@
 								<button
 									type="button"
 									onclick={() => addLinePrefix('# ')}
-									class="rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="Heading"
 								>
 									H1
@@ -450,7 +398,7 @@
 								<button
 									type="button"
 									onclick={() => addLinePrefix('- ')}
-									class="rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="List"
 								>
 									List
@@ -458,7 +406,7 @@
 								<button
 									type="button"
 									onclick={insertCodeBlock}
-									class="rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="Code Block"
 								>
 									Code
@@ -466,7 +414,7 @@
 								<button
 									type="button"
 									onclick={insertLink}
-									class="rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="Link"
 								>
 									Link
@@ -474,13 +422,13 @@
 								<button
 									type="button"
 									onclick={insertHorizontalRule}
-									class="rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="Horizontal Rule"
 								>
 									HR
 								</button>
 								<label
-									class="cursor-pointer rounded bg-gray-100 px-3 py-1 text-sm hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600"
+									class="cursor-pointer rounded bg-secondary px-3 py-1 text-sm text-secondary-foreground hover:bg-secondary/80"
 									title="Upload"
 								>
 									📎
@@ -499,7 +447,7 @@
 							ondragover={handleDragOver}
 							ondragleave={handleDragLeave}
 							ondrop={handleDrop}
-							class="relative {dragOver ? 'bg-gray-100 dark:bg-gray-800' : ''}"
+							class="relative {dragOver ? 'bg-accent' : ''}"
 						>
 							<textarea
 								id="content"
@@ -507,12 +455,12 @@
 								bind:value={content}
 								onkeydown={onEditorKeyDown}
 								placeholder="Start writing your journal entry... (Markdown supported)"
-								class="min-h-[500px] w-full resize-none bg-transparent p-6 text-gray-900 placeholder-gray-400 focus:outline-none dark:text-white"
+								class="min-h-[500px] w-full resize-none bg-transparent p-6 text-foreground placeholder-muted-foreground focus:outline-none"
 								required
 							></textarea>
 							{#if uploading}
 								<div
-									class="bg-gray-1000 absolute top-4 right-4 rounded-full px-3 py-1 text-sm text-white"
+									class="absolute top-4 right-4 rounded-full bg-primary px-3 py-1 text-sm text-primary-foreground"
 								>
 									Uploading...
 								</div>
@@ -521,8 +469,8 @@
 					</div>
 
 					<!-- Voice Recorder -->
-					<div class="rounded-xl bg-white p-6 shadow-lg dark:bg-gray-800">
-						<h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Voice Journaling</h3>
+					<div class="rounded-xl bg-card border p-6 shadow-lg">
+						<h3 class="mb-4 text-lg font-semibold text-foreground">Voice Journaling</h3>
 						<VoiceRecorder onTranscript={handleVoiceTranscript} />
 					</div>
 
@@ -531,13 +479,13 @@
 						<button
 							type="submit"
 							disabled={submitting || !content.trim()}
-							class="flex-1 rounded-lg bg-gray-900 px-6 py-3 font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:disabled:bg-gray-700"
+							class="flex-1 rounded-lg bg-primary px-6 py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
 						>
 							{submitting ? 'Saving...' : 'Save Entry'}
 						</button>
 						<a
 							href="/journal"
-							class="rounded-lg bg-gray-200 px-6 py-3 text-center font-semibold text-gray-900 transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+							class="rounded-lg bg-secondary px-6 py-3 text-center font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
 						>
 							Cancel
 						</a>
@@ -546,11 +494,11 @@
 
 				<!-- Preview Section -->
 				<div class="space-y-6">
-					<div class="sticky top-8 rounded-xl bg-white p-6 shadow-lg dark:bg-gray-800">
-						<h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Preview</h2>
+					<div class="sticky top-8 rounded-xl bg-card border p-6 shadow-lg">
+						<h2 class="mb-4 text-lg font-semibold text-foreground">Preview</h2>
 						<div class="prose max-w-none dark:prose-invert" use:safeHtml={content.trim() ? previewHtml : ''}>
 							{#if !content.trim()}
-								<p class="text-gray-400 italic">Your preview will appear here...</p>
+								<p class="text-muted-foreground italic">Your preview will appear here...</p>
 							{/if}
 						</div>
 					</div>

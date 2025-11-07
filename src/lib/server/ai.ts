@@ -1,16 +1,14 @@
-import OpenAI from 'openai';
 import { Groq } from 'groq-sdk';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { env } from './env';
 import { db } from './db';
-import { conversation, entry, aiSettings, entryEmbedding } from './db/schema';
-import type { AiSettings, Entry } from './db/schema';
+import { conversation, entry } from './db/schema';
+import type { Entry } from './db/schema';
 import { eq, desc, and } from 'drizzle-orm';
-import { parseEmbedding, serializeEmbedding, cosineSimilarity } from './vector';
 
 /**
  * AI Conversational Companion
  * Provides context-aware conversations about journal entries and mood patterns
+ * Uses Groq API with llama-3.1-8b-instant model
  */
 
 export interface Message {
@@ -18,239 +16,51 @@ export interface Message {
 	content: string;
 }
 
-type AIProvider = 'openai' | 'groq' | 'gemini' | 'local';
-
-type ProviderConfig =
-	| { provider: 'openai'; model: string; apiKey: string }
-	| { provider: 'groq'; model: string; apiKey: string }
-	| { provider: 'gemini'; model: string; apiKey: string }
-	| { provider: 'local'; model: string };
-
-const DEFAULT_MODELS: Record<AIProvider, string> = {
-	openai: 'gpt-4o-mini',
-	groq: 'llama3-8b-8192',
-	gemini: 'gemini-2.5-flash',
-	local: 'llama3.2:3b'
-};
+// Fixed configuration - Groq with llama-3.1-8b-instant
+const MODEL = 'llama-3.1-8b-instant';
 
 const FALLBACK_RESPONSE = "I'm here to listen.";
 const FALLBACK_FOLLOW_UP = "How are you feeling about what you've written?";
 
-// Ollama API endpoint (configurable via environment)
-const OLLAMA_BASE_URL = env.OLLAMA_BASE_URL || 'http://localhost:11434';
-
-function sanitizeKey(value: string | null | undefined): string | null {
-	if (!value) return null;
-	const trimmed = value.trim();
-	return trimmed.length === 0 ? null : trimmed;
-}
-
-function normalizeProvider(provider?: string | null): AIProvider {
-	switch ((provider ?? '').toLowerCase()) {
-		case 'groq':
-			return 'groq';
-		case 'gemini':
-			return 'gemini';
-		case 'local':
-			return 'local';
-		default:
-			return 'openai';
+/**
+ * Initialize Groq client
+ */
+function getGroqClient(): Groq {
+	const apiKey = env.GROQ_API_KEY;
+	if (!apiKey) {
+		throw new Error('Groq API key is not configured. Please set GROQ_API_KEY in your environment.');
 	}
-}
-
-function resolveProviderConfig(settings?: AiSettings | null): ProviderConfig {
-	const provider = normalizeProvider(settings?.provider);
-	const modelFallback = DEFAULT_MODELS[provider];
-	const model =
-		settings?.model && settings.model.trim().length > 0 ? settings.model.trim() : modelFallback;
-
-	switch (provider) {
-		case 'openai': {
-			const apiKey = sanitizeKey(settings?.openaiApiKey) ?? sanitizeKey(env.OPENAI_API_KEY);
-			if (!apiKey) throw new Error('OpenAI API key is not configured.');
-			return { provider, model, apiKey };
-		}
-		case 'groq': {
-			const apiKey = sanitizeKey(settings?.groqApiKey) ?? sanitizeKey(env.GROQ_API_KEY);
-			if (!apiKey) throw new Error('Groq API key is not configured.');
-			return { provider, model, apiKey };
-		}
-		case 'gemini': {
-			const apiKey = sanitizeKey(settings?.geminiApiKey) ?? sanitizeKey(env.GEMINI_API_KEY);
-			if (!apiKey) throw new Error('Gemini API key is not configured.');
-			return { provider, model, apiKey };
-		}
-		case 'local':
-		default:
-			return { provider: 'local', model };
-	}
+	return new Groq({ apiKey });
 }
 
 /**
- * Check if Ollama is available
+ * Run chat completion with Groq
  */
-async function checkOllamaAvailable(): Promise<boolean> {
-	try {
-		const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
-			method: 'GET',
-			signal: AbortSignal.timeout(2000)
-		});
-		return response.ok;
-	} catch {
-		return false;
-	}
-}
-
-/**
- * List available Ollama models
- */
-async function listOllamaModels(): Promise<string[]> {
-	try {
-		const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
-		if (!response.ok) return [];
-		const data: { models?: Array<{ name: string }> } = await response.json();
-		return data.models?.map((m) => m.name) || [];
-	} catch {
-		return [];
-	}
-}
-
-/**
- * Run chat completion with Ollama
- */
-async function runLocalChatCompletion(
+async function runChatCompletion(
 	messages: Message[],
-	model: string,
 	opts: {
 		maxTokens: number;
 		temperature: number;
 	}
 ): Promise<string> {
-	const targetModel = model.trim().length > 0 ? model.trim() : DEFAULT_MODELS.local;
-
-	// Check if Ollama is running
-	const isAvailable = await checkOllamaAvailable();
-	if (!isAvailable) {
-		throw new Error(
-			'Ollama is not running. Please:\n' +
-				'1. Install Ollama from https://ollama.com\n' +
-				'2. Start Ollama\n' +
-				`3. Pull a model: ollama pull ${targetModel}\n\n` +
-				'Or switch to a cloud provider (Groq, OpenAI, or Gemini) in AI settings.'
-		);
-	}
-
 	try {
-		const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				model: targetModel,
-				messages: messages.map((msg) => ({
-					role: msg.role,
-					content: msg.content
-				})),
-				stream: false,
-				options: {
-					temperature: opts.temperature,
-					num_predict: opts.maxTokens
-				}
-			})
+		const groq = getGroqClient();
+		
+		const completion = await groq.chat.completions.create({
+			model: MODEL,
+			messages: messages as Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+			max_tokens: opts.maxTokens,
+			temperature: opts.temperature
 		});
 
-		if (!response.ok) {
-			const error = await response.text();
-			if (error.includes('model') && error.includes('not found')) {
-				const availableModels = await listOllamaModels();
-				throw new Error(
-					`Model "${targetModel}" not found in Ollama.\n` +
-						(availableModels.length > 0
-							? `Available models: ${availableModels.join(', ')}\n`
-							: '') +
-						`\nTo use this model, run: ollama pull ${targetModel}\n` +
-						'Recommended models: llama3.2:3b, llama3.2:1b, gemma2:2b, qwen2.5:3b'
-				);
-			}
-			throw new Error(`Ollama API error: ${error}`);
-		}
-
-		const data = await response.json();
-		const content = data.message?.content?.trim();
+		const content = completion.choices[0]?.message?.content?.trim();
 		return content || FALLBACK_RESPONSE;
 	} catch (error) {
-		if (error instanceof Error && error.message.includes('Ollama')) {
-			throw error;
+		console.error('Groq API error:', error);
+		if (error instanceof Error && error.message.includes('API key')) {
+			throw new Error('Invalid or missing Groq API key. Please check your GROQ_API_KEY environment variable.');
 		}
-		throw new Error(
-			`Failed to communicate with Ollama: ${error instanceof Error ? error.message : 'Unknown error'}\n` +
-				'Make sure Ollama is running and accessible at ' +
-				OLLAMA_BASE_URL
-		);
-	}
-}
-
-function mapMessages(messages: Message[]) {
-	return messages.map((msg) => ({ role: msg.role, content: msg.content }));
-}
-
-/**
- * Get user's AI settings
- */
-export async function getAISettings(userId: string) {
-	const settings = await db.select().from(aiSettings).where(eq(aiSettings.userId, userId)).get();
-
-	return settings;
-}
-
-/**
- * Save user's AI settings
- */
-export async function saveAISettings(
-	userId: string,
-	data: {
-		ai_enabled?: boolean;
-		privacy_consent?: boolean;
-		provider?: string;
-		model?: string;
-		openai_api_key?: string | null;
-		groq_api_key?: string | null;
-		gemini_api_key?: string | null;
-	}
-) {
-	const existing = await getAISettings(userId);
-	const now = new Date();
-	const provider = normalizeProvider(data.provider);
-	const requestedModel = data.model && data.model.trim().length > 0 ? data.model.trim() : undefined;
-	const model = requestedModel ?? DEFAULT_MODELS[provider];
-
-	const sanitizedOpenAI = 'openai_api_key' in data ? sanitizeKey(data.openai_api_key) : undefined;
-	const sanitizedGroq = 'groq_api_key' in data ? sanitizeKey(data.groq_api_key) : undefined;
-	const sanitizedGemini = 'gemini_api_key' in data ? sanitizeKey(data.gemini_api_key) : undefined;
-
-	if (existing) {
-		const updateData: Record<string, unknown> = { updatedAt: now };
-
-		if (typeof data.ai_enabled === 'boolean') updateData.aiEnabled = data.ai_enabled;
-		if (typeof data.privacy_consent === 'boolean') updateData.privacyConsent = data.privacy_consent;
-		if (data.provider) updateData.provider = provider;
-		if (data.model || data.provider) updateData.model = model;
-		if (sanitizedOpenAI !== undefined) updateData.openaiApiKey = sanitizedOpenAI;
-		if (sanitizedGroq !== undefined) updateData.groqApiKey = sanitizedGroq;
-		if (sanitizedGemini !== undefined) updateData.geminiApiKey = sanitizedGemini;
-
-		await db.update(aiSettings).set(updateData).where(eq(aiSettings.userId, userId));
-	} else {
-		await db.insert(aiSettings).values({
-			userId,
-			aiEnabled: data.ai_enabled ?? false,
-			privacyConsent: data.privacy_consent ?? false,
-			provider,
-			model,
-			openaiApiKey: sanitizeKey(data.openai_api_key) ?? null,
-			groqApiKey: sanitizeKey(data.groq_api_key) ?? null,
-			geminiApiKey: sanitizeKey(data.gemini_api_key) ?? null,
-			updatedAt: now
-		});
+		throw new Error(`Failed to communicate with Groq: ${error instanceof Error ? error.message : 'Unknown error'}`);
 	}
 }
 
@@ -345,12 +155,12 @@ async function buildJournalContext(userId: string, entryId?: string): Promise<st
  */
 export async function generateFollowUpQuestion(
 	userId: string,
-	entryId: string,
-	settings: AiSettings | null
+	entryId: string
 ): Promise<string> {
-	const context = await buildJournalContext(userId, entryId);
+	try {
+		const context = await buildJournalContext(userId, entryId);
 
-	const systemPrompt = `You are a compassionate AI companion for a mood journal app. Your role is to ask ONE thoughtful, open-ended follow-up question after the user writes a journal entry. 
+		const systemPrompt = `You are a compassionate AI companion for a mood journal app. Your role is to ask ONE thoughtful, open-ended follow-up question after the user writes a journal entry. 
 
 Guidelines:
 - Be warm, empathetic, and non-judgmental
@@ -363,59 +173,18 @@ Guidelines:
 
 ${context}`;
 
-	const providerConfig = resolveProviderConfig(settings);
+		const promptMessage: Message = {
+			role: 'user',
+			content: 'I just finished writing this journal entry. Ask me one thoughtful follow-up question.'
+		};
 
-	const promptMessage: Message = {
-		role: 'user',
-		content: 'I just finished writing this journal entry. Ask me one thoughtful follow-up question.'
-	};
-
-	switch (providerConfig.provider) {
-		case 'openai': {
-			const client = new OpenAI({ apiKey: providerConfig.apiKey });
-			const response = await client.chat.completions.create({
-				model: providerConfig.model,
-				messages: [{ role: 'system', content: systemPrompt }, promptMessage],
-				temperature: 0.8,
-				max_tokens: 100
-			});
-			return response.choices[0]?.message?.content?.trim() || FALLBACK_FOLLOW_UP;
-		}
-		case 'groq': {
-			const client = new Groq({ apiKey: providerConfig.apiKey });
-			const response = await client.chat.completions.create({
-				model: providerConfig.model,
-				messages: [{ role: 'system', content: systemPrompt }, promptMessage],
-				temperature: 0.8,
-				max_tokens: 100
-			});
-			return response.choices[0]?.message?.content?.trim() || FALLBACK_FOLLOW_UP;
-		}
-		case 'gemini': {
-			const client = new GoogleGenerativeAI(providerConfig.apiKey);
-			const model = client.getGenerativeModel({
-				model: providerConfig.model,
-				systemInstruction: systemPrompt
-			});
-			const result = await model.generateContent({
-				contents: [
-					{
-						role: 'user',
-						parts: [{ text: promptMessage.content }]
-					}
-				]
-			});
-			return result.response.text()?.trim() || FALLBACK_FOLLOW_UP;
-		}
-		case 'local':
-		default: {
-			const response = await runLocalChatCompletion(
-				[{ role: 'system', content: systemPrompt }, promptMessage],
-				providerConfig.model,
-				{ maxTokens: 120, temperature: 0.8 }
-			);
-			return response || FALLBACK_FOLLOW_UP;
-		}
+		return await runChatCompletion(
+			[{ role: 'system', content: systemPrompt }, promptMessage],
+			{ maxTokens: 100, temperature: 0.8 }
+		);
+	} catch (error) {
+		console.error('Error generating follow-up question:', error);
+		return FALLBACK_FOLLOW_UP;
 	}
 }
 
@@ -425,42 +194,42 @@ ${context}`;
 export async function chat(
 	userId: string,
 	userMessage: string,
-	settings: AiSettings | null,
 	entryId?: string
 ): Promise<string> {
-	// Save user message
-	await saveMessage(userId, 'user', userMessage, entryId);
-
-	// Get conversation history and journal context
-	const history = await getConversationHistory(userId, entryId, 10);
-	const journalContext = await buildJournalContext(userId, entryId);
-
-	// Retrieve similar entries using RAG
-	let ragContext = '';
 	try {
-		const similarEntries = await retrieveSimilarEntries(userMessage, userId, settings, 3, entryId);
-		if (similarEntries.length > 0) {
-			ragContext =
-				'\n\nRelevant past entries for additional context:\n' +
-				similarEntries
-					.map(({ entry, similarity }) => {
-						const date = new Date(entry.createdAt).toLocaleDateString();
-						const sentiment =
-							entry.sentimentLabel === 'POSITIVE'
-								? '😊'
-								: entry.sentimentLabel === 'NEGATIVE'
-									? '😔'
-									: '😐';
-						return `${date} ${sentiment} (relevance: ${(similarity * 100).toFixed(0)}%):\n"${entry.content}"`;
-					})
-					.join('\n\n');
-		}
-	} catch (error) {
-		// RAG is optional - continue without it if it fails
-		console.log('Continuing without RAG context');
-	}
+		// Save user message
+		await saveMessage(userId, 'user', userMessage, entryId);
 
-	const systemPrompt = `You are a compassionate AI companion for a mood journal app. Your role is to help users reflect on their emotions, identify patterns, and gain insights from their journal entries.
+		// Get conversation history and journal context
+		const history = await getConversationHistory(userId, entryId, 10);
+		const journalContext = await buildJournalContext(userId, entryId);
+
+		// Retrieve similar entries using RAG
+		let ragContext = '';
+		try {
+			const similarEntries = await retrieveSimilarEntries(userMessage, userId, 3, entryId);
+			if (similarEntries.length > 0) {
+				ragContext =
+					'\n\nRelevant past entries for additional context:\n' +
+					similarEntries
+						.map(({ entry, similarity }) => {
+							const date = new Date(entry.createdAt).toLocaleDateString();
+							const sentiment =
+								entry.sentimentLabel === 'POSITIVE'
+									? '😊'
+									: entry.sentimentLabel === 'NEGATIVE'
+										? '😔'
+										: '😐';
+							return `${date} ${sentiment} (relevance: ${(similarity * 100).toFixed(0)}%):\n"${entry.content}"`;
+						})
+						.join('\n\n');
+			}
+		} catch {
+			// RAG is optional - continue without it if it fails
+			console.log('Continuing without RAG context');
+		}
+
+		const systemPrompt = `You are a compassionate AI companion for a mood journal app. Your role is to help users reflect on their emotions, identify patterns, and gain insights from their journal entries.
 
 Guidelines:
 - Be warm, empathetic, and genuinely curious
@@ -474,77 +243,33 @@ Guidelines:
 
 ${journalContext}${ragContext}`;
 
-	// Build messages array
-	const messages: Message[] = [
-		{ role: 'system', content: systemPrompt },
-		...history.map(
-			(msg): Message => ({
-				role: msg.role as 'user' | 'assistant',
-				content: msg.content
-			})
-		),
-		{ role: 'user', content: userMessage }
-	];
+		// Build messages array
+		const messages: Message[] = [
+			{ role: 'system', content: systemPrompt },
+			...history.map(
+				(msg): Message => ({
+					role: msg.role as 'user' | 'assistant',
+					content: msg.content
+				})
+			),
+			{ role: 'user', content: userMessage }
+		];
 
-	const providerConfig = resolveProviderConfig(settings);
+		const assistantMessage = await runChatCompletion(messages, {
+			maxTokens: 300,
+			temperature: 0.7
+		});
 
-	let assistantMessage: string;
+		// Save assistant response
+		await saveMessage(userId, 'assistant', assistantMessage, entryId);
 
-	switch (providerConfig.provider) {
-		case 'openai': {
-			const client = new OpenAI({ apiKey: providerConfig.apiKey });
-			const response = await client.chat.completions.create({
-				model: providerConfig.model,
-				messages: mapMessages(messages),
-				temperature: 0.7,
-				max_tokens: 300
-			});
-			assistantMessage = response.choices[0]?.message?.content?.trim() || FALLBACK_RESPONSE;
-			break;
-		}
-		case 'groq': {
-			const client = new Groq({ apiKey: providerConfig.apiKey });
-			const response = await client.chat.completions.create({
-				model: providerConfig.model,
-				messages: mapMessages(messages),
-				temperature: 0.7,
-				max_tokens: 300
-			});
-			assistantMessage = response.choices[0]?.message?.content?.trim() || FALLBACK_RESPONSE;
-			break;
-		}
-		case 'gemini': {
-			const systemInstruction = messages[0]?.role === 'system' ? messages[0].content : '';
-			const messageBody = systemInstruction ? messages.slice(1) : messages;
-			const historyMessages = messageBody.slice(0, -1).map((msg) => ({
-				role: msg.role === 'assistant' ? 'model' : 'user',
-				parts: [{ text: msg.content }]
-			}));
-			const latest = messageBody[messageBody.length - 1];
-			const client = new GoogleGenerativeAI(providerConfig.apiKey);
-			const model = client.getGenerativeModel({
-				model: providerConfig.model,
-				systemInstruction
-			});
-			const chatSession = model.startChat({ history: historyMessages });
-			const result = await chatSession.sendMessage(latest.content);
-			assistantMessage = result.response.text()?.trim() || FALLBACK_RESPONSE;
-			break;
-		}
-		case 'local':
-		default: {
-			assistantMessage = await runLocalChatCompletion(messages, providerConfig.model, {
-				maxTokens: 300,
-				temperature: 0.7
-			});
-			break;
-		}
+		return assistantMessage;
+	} catch (error) {
+		console.error('Error in chat:', error);
+		// Save fallback response
+		await saveMessage(userId, 'assistant', FALLBACK_RESPONSE, entryId);
+		return FALLBACK_RESPONSE;
 	}
-
-	// Save assistant response
-	await saveMessage(userId, 'assistant', assistantMessage, entryId);
-
-	return assistantMessage;
 }
 
 /**
@@ -559,189 +284,22 @@ export async function clearConversation(userId: string, entryId?: string) {
 }
 
 /**
- * Generate embeddings for a text using OpenAI
+ * Store embedding for a journal entry (Disabled - requires separate embedding service)
  */
-async function generateOpenAIEmbedding(text: string, apiKey: string): Promise<number[]> {
-	const client = new OpenAI({ apiKey });
-	const response = await client.embeddings.create({
-		model: 'text-embedding-3-small',
-		input: text,
-		encoding_format: 'float'
-	});
-	return response.data[0].embedding;
+export async function storeEntryEmbedding(entryId: string): Promise<void> {
+	// Embedding generation disabled - would require separate embedding API service
+	console.log('Entry embedding storage skipped for entry:', entryId);
 }
 
 /**
- * Generate embeddings for a text using local Ollama models
- */
-async function generateLocalEmbedding(text: string, model: string): Promise<number[]> {
-	const targetModel = model.trim().length > 0 ? model.trim() : 'nomic-embed-text';
-
-	// Check if Ollama is running
-	const isAvailable = await checkOllamaAvailable();
-	if (!isAvailable) {
-		throw new Error('Ollama is not running. Cannot generate embeddings.');
-	}
-
-	try {
-		const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				model: targetModel,
-				prompt: text
-			})
-		});
-
-		if (!response.ok) {
-			const error = await response.text();
-			throw new Error(`Ollama embedding API error: ${error}`);
-		}
-
-		const data = await response.json();
-		const embedding = data.embedding;
-
-		if (!Array.isArray(embedding) || !embedding.every((n) => typeof n === 'number')) {
-			throw new Error('Invalid embedding response from Ollama');
-		}
-
-		return embedding;
-	} catch (error) {
-		if (error instanceof Error && error.message.includes('Ollama')) {
-			throw error;
-		}
-		throw new Error(
-			`Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`
-		);
-	}
-}
-
-/**
- * Generate embedding for text based on provider config
- */
-async function generateEmbedding(text: string, providerConfig: ProviderConfig): Promise<number[]> {
-	switch (providerConfig.provider) {
-		case 'openai':
-			return generateOpenAIEmbedding(text, providerConfig.apiKey);
-		case 'local':
-		default:
-			return generateLocalEmbedding(text, providerConfig.model);
-	}
-}
-
-/**
- * Store embedding for a journal entry
- */
-export async function storeEntryEmbedding(
-	entryId: string,
-	content: string,
-	settings: AiSettings | null
-): Promise<void> {
-	try {
-		const providerConfig = resolveProviderConfig(settings);
-		
-		// For local provider, check if Ollama is available first
-		if (providerConfig.provider === 'local') {
-			const isAvailable = await checkOllamaAvailable();
-			if (!isAvailable) {
-				console.log('Ollama not available - skipping embedding generation for entry', entryId);
-				return;
-			}
-		}
-		
-		const embedding = await generateEmbedding(content, providerConfig);
-		const embeddingJson = serializeEmbedding(embedding);
-		const model =
-			providerConfig.provider === 'openai' ? 'text-embedding-3-small' : providerConfig.model;
-
-		// Check if embedding already exists
-		const existing = await db
-			.select()
-			.from(entryEmbedding)
-			.where(eq(entryEmbedding.entryId, entryId))
-			.get();
-
-		const now = new Date();
-		if (existing) {
-			// Update existing embedding
-			await db
-				.update(entryEmbedding)
-				.set({
-					embedding: embeddingJson,
-					embeddingModel: model,
-					updatedAt: now
-				})
-				.where(eq(entryEmbedding.entryId, entryId));
-		} else {
-			// Create new embedding
-			await db.insert(entryEmbedding).values({
-				id: crypto.randomUUID(),
-				entryId,
-				embedding: embeddingJson,
-				embeddingModel: model,
-				createdAt: now,
-				updatedAt: now
-			});
-		}
-	} catch (error) {
-		console.error('Failed to store entry embedding:', error);
-		// Don't throw - embedding generation failure shouldn't break journal entry creation
-	}
-}
-
-/**
- * Retrieve similar entries based on semantic similarity
+ * Retrieve similar entries based on semantic similarity (Disabled - requires embeddings)
  */
 export async function retrieveSimilarEntries(
-	query: string,
-	userId: string,
-	settings: AiSettings | null,
-	limit: number = 5,
-	entryIdToExclude?: string
+	_query: string,
+	_userId: string,
+	_limit: number = 5,
+	_entryIdToExclude?: string
 ): Promise<Array<{ entry: Entry; similarity: number }>> {
-	try {
-		const providerConfig = resolveProviderConfig(settings);
-		
-		// For local provider, check if Ollama is available first
-		if (providerConfig.provider === 'local') {
-			const isAvailable = await checkOllamaAvailable();
-			if (!isAvailable) {
-				console.log('Ollama not available - skipping RAG similarity search');
-				return [];
-			}
-		}
-		
-		const queryEmbedding = await generateEmbedding(query, providerConfig);
-
-		// Get all embeddings for user's entries
-		const userEmbeddings = await db
-			.select({
-				embedding: entryEmbedding.embedding,
-				entryId: entryEmbedding.entryId,
-				entry: entry
-			})
-			.from(entryEmbedding)
-			.innerJoin(entry, eq(entryEmbedding.entryId, entry.id))
-			.where(eq(entry.userId, userId))
-			.all();
-
-		if (userEmbeddings.length === 0) {
-			return [];
-		}
-
-		// Parse embeddings and calculate similarities
-		const similarities = userEmbeddings
-			.filter((e) => e.entryId !== entryIdToExclude) // Exclude the current entry if specified
-			.map((e) => ({
-				entry: e.entry,
-				similarity: cosineSimilarity(queryEmbedding, parseEmbedding(e.embedding))
-			}))
-			.sort((a, b) => b.similarity - a.similarity)
-			.slice(0, limit);
-
-		return similarities;
-	} catch (error) {
-		console.log('RAG similarity search not available:', error instanceof Error ? error.message : 'Unknown error');
-		return [];
-	}
+	// RAG disabled - would require embedding service
+	return [];
 }

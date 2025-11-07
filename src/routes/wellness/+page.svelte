@@ -10,13 +10,13 @@
 	function getPriorityColor(priority: string) {
 		switch (priority) {
 			case 'high':
-				return 'border-red-500 bg-red-50 dark:bg-red-900/20';
+				return 'border-red-500 bg-red-100 dark:bg-red-900/20';
 			case 'medium':
-				return 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20';
+				return 'border-yellow-500 bg-yellow-100 dark:bg-yellow-900/20';
 			case 'low':
-				return 'border-green-500 bg-green-50 dark:bg-green-900/20';
+				return 'border-green-500 bg-green-100 dark:bg-green-900/20';
 			default:
-				return 'border-gray-500 bg-gray-50 dark:bg-gray-700/20';
+				return 'border-gray-500 bg-gray-100 dark:bg-gray-700/20';
 		}
 	}
 
@@ -44,12 +44,12 @@
 	<title>Wellness - Mood Journal</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+<div class="min-h-screen bg-background">
 	<div class="mx-auto max-w-6xl px-4 py-8">
 		<!-- Header -->
 		<div class="mb-8">
-			<h1 class="mb-2 text-3xl font-bold text-gray-900 dark:text-white">Wellness Center</h1>
-			<p class="text-gray-600 dark:text-gray-400">
+			<h1 class="mb-2 text-3xl font-bold text-foreground">Wellness Center</h1>
+			<p class="text-muted-foreground">
 				Personalized recommendations to support your mental wellness journey
 			</p>
 		</div>
@@ -59,8 +59,8 @@
 			<div class="space-y-8 lg:col-span-2">
 				<!-- Personalized Recommendations -->
 				{#if data.recommendations.length > 0}
-					<div class="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-						<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+					<div class="rounded-lg bg-card p-6 shadow-sm border">
+						<h2 class="mb-4 text-xl font-semibold text-foreground">
 							Personalized for You
 						</h2>
 						<div class="space-y-4">
@@ -72,21 +72,21 @@
 										<span class="text-2xl">{recommendation.icon}</span>
 										<div class="flex-1">
 											<div class="mb-1 flex items-center gap-2">
-												<h3 class="font-medium text-gray-900 dark:text-white">
+												<h3 class="font-medium text-foreground">
 													{recommendation.title}
 												</h3>
 												<span
-													class="rounded-full bg-gray-200 px-2 py-1 text-xs text-gray-700 capitalize dark:bg-gray-700 dark:text-gray-300"
+													class="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground capitalize"
 												>
 													{recommendation.type}
 												</span>
 												{#if recommendation.duration}
-													<span class="text-xs text-gray-500 dark:text-gray-400"
+													<span class="text-xs text-muted-foreground"
 														>{recommendation.duration}</span
 													>
 												{/if}
 											</div>
-											<p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
+											<p class="mb-2 text-sm text-muted-foreground">
 												{recommendation.description}
 											</p>
 											{#if recommendation.url}
@@ -108,15 +108,15 @@
 				{/if}
 
 				<!-- Journaling Prompts -->
-				<div class="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-					<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+				<div class="rounded-lg bg-card p-6 shadow-sm border">
+					<h2 class="mb-4 text-xl font-semibold text-foreground">
 						Journaling Prompts
 					</h2>
 					<div class="space-y-3">
 						{#each data.prompts as prompt, i}
-							<div class="flex items-start gap-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
+							<div class="flex items-start gap-3 rounded-lg bg-secondary p-3">
 								<span class="mt-0.5 text-lg">💭</span>
-								<p class="flex-1 text-gray-700 dark:text-gray-300">{prompt}</p>
+								<p class="flex-1 text-secondary-foreground">{prompt}</p>
 							</div>
 						{/each}
 					</div>
@@ -133,14 +133,14 @@
 			<div class="space-y-6">
 				<!-- Interactive Breathing Exercise -->
 				{#if showBreathingExercise}
-					<div class="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
+					<div class="rounded-lg bg-card p-6 shadow-sm border">
 						<div class="mb-4 flex items-center justify-between">
-							<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+							<h3 class="text-lg font-semibold text-foreground">
 								Breathing Exercise
 							</h3>
 							<button
 								onclick={() => (showBreathingExercise = false)}
-								class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+								class="text-sm text-muted-foreground hover:text-foreground"
 							>
 								Close
 							</button>
@@ -151,8 +151,8 @@
 									onclick={() => (selectedExercise = 'box')}
 									class="flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors {selectedExercise ===
 									'box'
-										? 'bg-blue-600 text-white'
-										: 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'}"
+										? 'bg-primary text-primary-foreground'
+										: 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}"
 								>
 									Box Breathing
 								</button>
@@ -160,8 +160,8 @@
 									onclick={() => (selectedExercise = '478')}
 									class="flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors {selectedExercise ===
 									'478'
-										? 'bg-blue-600 text-white'
-										: 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'}"
+										? 'bg-primary text-primary-foreground'
+										: 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}"
 								>
 									4-7-8 Breathing
 								</button>
@@ -172,16 +172,16 @@
 				{/if}
 
 				<!-- Breathing Exercises List -->
-				<div class="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-					<h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+				<div class="rounded-lg bg-card p-6 shadow-sm border">
+					<h3 class="mb-4 text-lg font-semibold text-foreground">
 						Breathing Exercises
 					</h3>
 					<div class="space-y-4">
 						{#each data.breathingExercises as exercise}
-							<div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-								<h4 class="mb-2 font-medium text-gray-900 dark:text-white">{exercise.name}</h4>
-								<p class="mb-3 text-sm text-gray-600 dark:text-gray-400">{exercise.description}</p>
-								<div class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+							<div class="rounded-lg border p-4">
+								<h4 class="mb-2 font-medium text-foreground">{exercise.name}</h4>
+								<p class="mb-3 text-sm text-muted-foreground">{exercise.description}</p>
+								<div class="mb-2 text-xs text-muted-foreground">
 									<strong>Duration:</strong>
 									{exercise.duration}
 								</div>
@@ -190,7 +190,7 @@
 										selectedExercise = exercise.name === 'Box Breathing' ? 'box' : '478';
 										showBreathingExercise = true;
 									}}
-									class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+									class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
 								>
 									Try It Now
 								</button>
@@ -199,84 +199,45 @@
 					</div>
 				</div>
 
-				<!-- Mood Patterns -->
-				{#if data.moodPatterns.length > 0}
-					<div class="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-						<h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-							Your Mood Patterns
-						</h3>
-						<div class="space-y-3">
-							{#each data.moodPatterns.slice(0, 5) as pattern}
-								<div class="flex items-center justify-between">
-									<div class="flex items-center gap-2">
-										<span class="text-lg">
-											{pattern.mood === 'happy'
-												? '😊'
-												: pattern.mood === 'sad'
-													? '😢'
-													: pattern.mood === 'anxious'
-														? '😰'
-														: pattern.mood === 'excited'
-															? '🤩'
-															: pattern.mood === 'neutral'
-																? '😐'
-																: '😐'}
-										</span>
-										<span class="text-gray-700 capitalize dark:text-gray-300">{pattern.mood}</span>
-									</div>
-									<div class="text-right">
-										<div class="text-sm font-medium text-gray-900 dark:text-white">
-											{pattern.frequency}x
-										</div>
-										<div class="text-xs text-gray-500 dark:text-gray-400">
-											Avg: {Math.round(pattern.averageSentiment)}%
-										</div>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
 				<!-- Quick Actions -->
-				<div class="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-					<h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Quick Actions</h3>
+				<div class="rounded-lg bg-card p-6 shadow-sm border">
+					<h3 class="mb-4 text-lg font-semibold text-foreground">Quick Actions</h3>
 					<div class="space-y-2">
 						<button
 							onclick={() => goto('/journal/new')}
-							class="w-full rounded-lg border border-gray-200 p-3 text-left transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
+							class="w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent"
 						>
 							<div class="flex items-center gap-3">
 								<span class="text-lg">📝</span>
 								<div>
-									<div class="font-medium text-gray-900 dark:text-white">New Entry</div>
-									<div class="text-sm text-gray-500 dark:text-gray-400">Start writing</div>
+									<div class="font-medium text-foreground">New Entry</div>
+									<div class="text-sm text-muted-foreground">Start writing</div>
 								</div>
 							</div>
 						</button>
 
 						<button
 							onclick={() => goto('/journal/analytics')}
-							class="w-full rounded-lg border border-gray-200 p-3 text-left transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
+							class="w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent"
 						>
 							<div class="flex items-center gap-3">
 								<span class="text-lg">📊</span>
 								<div>
-									<div class="font-medium text-gray-900 dark:text-white">View Analytics</div>
-									<div class="text-sm text-gray-500 dark:text-gray-400">Track your progress</div>
+									<div class="font-medium text-foreground">View Analytics</div>
+									<div class="text-sm text-muted-foreground">Track your progress</div>
 								</div>
 							</div>
 						</button>
 
 						<button
 							onclick={() => goto('/achievements')}
-							class="w-full rounded-lg border border-gray-200 p-3 text-left transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700"
+							class="w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent"
 						>
 							<div class="flex items-center gap-3">
 								<span class="text-lg">🏆</span>
 								<div>
-									<div class="font-medium text-gray-900 dark:text-white">Achievements</div>
-									<div class="text-sm text-gray-500 dark:text-gray-400">View your progress</div>
+									<div class="font-medium text-foreground">Achievements</div>
+									<div class="text-sm text-muted-foreground">View your progress</div>
 								</div>
 							</div>
 						</button>

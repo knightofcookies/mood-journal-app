@@ -7,8 +7,8 @@ import { getRequestEvent } from '$app/server';
 import { allow as allowRate } from '$lib/server/rateLimit';
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
-import { analyzeSentiment, extractKeywords, extractEntities, detectMood } from '$lib/server/nlp';
-import { getAISettings, generateFollowUpQuestion } from '$lib/server/ai';
+import { analyzeSentiment, extractKeywords } from '$lib/server/nlp';
+import { generateFollowUpQuestion } from '$lib/server/ai';
 import { updateUserAchievements } from '$lib/server/achievement-tracker';
 
 export const listEntries = query(async () => {
@@ -71,20 +71,9 @@ export const createEntry = form(
 		const ok = await allowRate(String(ip), 60, 60_000);
 		if (!ok) throw new Error('rate_limited');
 
-		// Analyze sentiment and extract keywords/entities
+		// Analyze sentiment and extract keywords
 		const sentiment = await analyzeSentiment(data.content);
 		const keywords = extractKeywords(data.content, 5);
-		const entities = extractEntities(data.content);
-
-		// Auto-generate nuanced mood from NLP analysis
-		// Detects specific emotions: anxious, stressed, excited, calm, angry, happy, sad, neutral
-		const autoMood = detectMood(data.content, sentiment.normalizedScore);
-		
-		// Debug logging
-		console.log('🔍 [Mood Detection Debug]');
-		console.log('   Content:', data.content);
-		console.log('   Sentiment Score:', sentiment.normalizedScore);
-		console.log('   Detected Mood:', autoMood);
 
 		const id = crypto.randomUUID();
 		const now = new Date();
@@ -94,18 +83,14 @@ export const createEntry = form(
 			id,
 			userId: user.id,
 			content: data.content,
-			mood: autoMood, // Auto-generated from NLP, not user input
 			sentimentLabel: sentiment.label,
 			sentimentScore: Math.round(sentiment.normalizedScore * 100), // Store as integer -100 to +100
 			createdAt: now,
 			updatedAt: now
 		});
 
-		// Process and insert tags (keywords + entities)
-		const allTags = [
-			...keywords.map((k) => ({ name: k, type: 'keyword' })),
-			...entities.map((e) => ({ name: e, type: 'entity' }))
-		];
+		// Process and insert tags (keywords only)
+		const allTags = keywords.map((k) => ({ name: k, type: 'keyword' }));
 
 		if (allTags.length > 0) {
 			// Insert or get existing tags
@@ -147,13 +132,10 @@ export const createEntry = form(
 			}
 		}
 
-		// Generate AI follow-up question if enabled
+		// Generate AI follow-up question
 		let aiQuestion: string | null = null;
 		try {
-			const settings = await getAISettings(user.id);
-			if (settings?.aiEnabled && settings?.privacyConsent) {
-				aiQuestion = await generateFollowUpQuestion(user.id, id, settings);
-			}
+			aiQuestion = await generateFollowUpQuestion(user.id, id);
 		} catch (error) {
 			console.error('Error generating AI follow-up question:', error);
 			// Don't fail the entry creation if AI fails

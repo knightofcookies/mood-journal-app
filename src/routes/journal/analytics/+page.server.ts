@@ -6,7 +6,6 @@ import { redirect } from '@sveltejs/kit';
 
 type EntryData = {
 	id: string;
-	mood: string;
 	sentimentScore: number | null;
 	sentimentLabel: string | null;
 	createdAt: Date;
@@ -26,7 +25,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const entries = await db
 		.select({
 			id: entry.id,
-			mood: entry.mood,
 			sentimentScore: entry.sentimentScore,
 			sentimentLabel: entry.sentimentLabel,
 			createdAt: entry.createdAt
@@ -47,15 +45,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		entries.length > 0
 			? entries.reduce((sum, e) => sum + (e.sentimentScore || 0), 0) / entries.length
 			: 0;
-
-	// Mood distribution
-	const moodCounts = entries.reduce(
-		(acc, e) => {
-			acc[e.mood] = (acc[e.mood] || 0) + 1;
-			return acc;
-		},
-		{} as Record<string, number>
-	);
 
 	// Sentiment distribution
 	const sentimentCounts = entries.reduce(
@@ -111,8 +100,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Prepare chart data
 	const chartData = entries.map((e) => ({
 		date: e.createdAt.toISOString(),
-		sentimentScore: e.sentimentScore || 0,
-		mood: e.mood
+		sentimentScore: e.sentimentScore || 0
 	}));
 
 	return {
@@ -122,7 +110,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			avgSentiment: Math.round(avgSentiment),
 			longestStreak,
 			activeStreak,
-			moodCounts,
 			sentimentCounts
 		},
 		chartData,

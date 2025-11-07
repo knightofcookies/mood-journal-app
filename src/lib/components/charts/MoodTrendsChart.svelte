@@ -32,7 +32,6 @@
 		data: Array<{
 			date: Date | string;
 			sentimentScore: number;
-			mood: string;
 			count?: number;
 		}>;
 		timeRange?: 'daily' | 'weekly' | 'monthly';

@@ -33,8 +33,8 @@
 <div class="mx-auto max-w-6xl space-y-8 p-6">
 	<!-- Header -->
 	<div class="mb-8">
-		<h1 class="mb-2 text-3xl font-bold text-gray-900 dark:text-white">Analytics & Insights</h1>
-		<p class="text-gray-600 dark:text-gray-400">
+		<h1 class="mb-2 text-3xl font-bold text-foreground">Analytics & Insights</h1>
+		<p class="text-muted-foreground">
 			Understand your emotional patterns and track your wellness journey
 		</p>
 	</div>
@@ -42,27 +42,27 @@
 	<!-- Statistics Cards -->
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
 		<!-- Total Entries -->
-		<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+		<div class="rounded-lg bg-card border border-border p-6 shadow">
 			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Entries</h3>
+				<h3 class="text-sm font-medium text-muted-foreground">Total Entries</h3>
 				<span class="text-2xl">📝</span>
 			</div>
-			<p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.totalEntries}</p>
-			<p class="mt-1 text-xs text-gray-500 dark:text-gray-500">
+			<p class="text-3xl font-bold text-foreground">{stats.totalEntries}</p>
+			<p class="mt-1 text-xs text-muted-foreground">
 				{stats.entriesLast30Days} in last 30 days
 			</p>
 		</div>
 
 		<!-- Average Sentiment -->
-		<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+		<div class="rounded-lg bg-card border border-border p-6 shadow">
 			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Avg Sentiment</h3>
+				<h3 class="text-sm font-medium text-muted-foreground">Avg Sentiment</h3>
 				<span class="text-2xl">{getSentimentEmoji(stats.avgSentiment)}</span>
 			</div>
 			<p class="text-3xl font-bold {getSentimentColor(stats.avgSentiment)}">
 				{stats.avgSentiment > 0 ? '+' : ''}{stats.avgSentiment}
 			</p>
-			<p class="mt-1 text-xs text-gray-500 dark:text-gray-500">
+			<p class="mt-1 text-xs text-muted-foreground">
 				{stats.avgSentiment > 50
 					? 'Very positive'
 					: stats.avgSentiment > 0
@@ -76,77 +76,77 @@
 		</div>
 
 		<!-- Current Streak -->
-		<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+		<div class="rounded-lg bg-card border border-border p-6 shadow">
 			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Current Streak</h3>
+				<h3 class="text-sm font-medium text-muted-foreground">Current Streak</h3>
 				<span class="text-2xl">🔥</span>
 			</div>
 			<p class="text-3xl font-bold text-orange-600">{stats.activeStreak}</p>
-			<p class="mt-1 text-xs text-gray-500 dark:text-gray-500">
+			<p class="mt-1 text-xs text-muted-foreground">
 				{stats.activeStreak === 1 ? 'day' : 'days'} in a row
 			</p>
 		</div>
 
 		<!-- Longest Streak -->
-		<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+		<div class="rounded-lg bg-card border border-border p-6 shadow">
 			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">Best Streak</h3>
+				<h3 class="text-sm font-medium text-muted-foreground">Best Streak</h3>
 				<span class="text-2xl">🏆</span>
 			</div>
 			<p class="text-3xl font-bold text-purple-600">{stats.longestStreak}</p>
-			<p class="mt-1 text-xs text-gray-500 dark:text-gray-500">Personal record</p>
+			<p class="mt-1 text-xs text-muted-foreground">Personal record</p>
 		</div>
 	</div>
 
 	<!-- Mood Trends Chart -->
-	<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+	<div class="rounded-lg bg-card border border-border p-6 shadow">
 		<div class="mb-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-			<h2 class="text-xl font-bold text-gray-900 dark:text-white">Mood Trends Over Time</h2>
+			<h2 class="text-xl font-bold text-foreground">Mood Trends Over Time</h2>
 
 			<div class="flex flex-wrap gap-2">
 				<!-- Time Range Selector -->
-				<div class="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
+				<div class="flex gap-1 rounded-lg bg-secondary p-1">
 					<button
 						onclick={() => (timeRange = 'daily')}
 						class="rounded px-3 py-1 text-sm font-medium transition-colors {timeRange === 'daily'
-							? 'bg-white text-blue-600 shadow dark:bg-gray-600 dark:text-blue-400'
-							: 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+							? 'bg-card text-blue-600 shadow'
+							: 'text-muted-foreground hover:text-foreground'}"
 					>
 						Daily
 					</button>
 					<button
 						onclick={() => (timeRange = 'weekly')}
 						class="rounded px-3 py-1 text-sm font-medium transition-colors {timeRange === 'weekly'
-							? 'bg-white text-blue-600 shadow dark:bg-gray-600 dark:text-blue-400'
-							: 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+							? 'bg-card text-blue-600 shadow'
+							: 'text-muted-foreground hover:text-foreground'}"
 					>
 						Weekly
 					</button>
 					<button
 						onclick={() => (timeRange = 'monthly')}
 						class="rounded px-3 py-1 text-sm font-medium transition-colors {timeRange === 'monthly'
-							? 'bg-white text-blue-600 shadow dark:bg-gray-600 dark:text-blue-400'
-							: 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+							? 'bg-card text-blue-600 shadow'
+							: 'text-muted-foreground hover:text-foreground'}"
 					>
 						Monthly
 					</button>
 				</div>
 
 				<!-- Chart Type Selector -->
-				<div class="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
+				<div class="flex gap-1 rounded-lg bg-secondary p-1">
 					<button
 						onclick={() => (chartType = 'line')}
 						class="rounded px-3 py-1 text-sm font-medium transition-colors {chartType === 'line'
-							? 'bg-white text-blue-600 shadow dark:bg-gray-600 dark:text-blue-400'
-							: 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+							? 'bg-card text-blue-600 shadow'
+							: 'text-muted-foreground hover:text-foreground'}"
 					>
 						Line
 					</button>
 					<button
 						onclick={() => (chartType = 'bar')}
 						class="rounded px-3 py-1 text-sm font-medium transition-colors {chartType === 'bar'
-							? 'bg-white text-blue-600 shadow dark:bg-gray-600 dark:text-blue-400'
-							: 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}"
+							? 'bg-card text-blue-600 shadow'
+							: 'text-muted-foreground hover:text-foreground'}"
 					>
 						Bar
 					</button>
@@ -157,37 +157,10 @@
 		<MoodTrendsChart data={data.chartData} {timeRange} {chartType} />
 	</div>
 
-	<!-- Mood & Sentiment Distribution -->
-	<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-		<!-- Mood Distribution -->
-		<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-			<h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">Mood Distribution</h2>
-			<div class="space-y-3">
-				{#each Object.entries(stats.moodCounts).sort((a, b) => b[1] - a[1]) as [mood, count]}
-					{@const percentage = ((count / stats.totalEntries) * 100).toFixed(1)}
-					<div>
-						<div class="mb-1 flex items-center justify-between">
-							<span class="text-sm font-medium text-gray-700 capitalize dark:text-gray-300">
-								{mood}
-							</span>
-							<span class="text-sm text-gray-500 dark:text-gray-400">
-								{count} ({percentage}%)
-							</span>
-						</div>
-						<div class="bg-secondary h-2 w-full rounded-full">
-							<div
-								class="bg-primary h-2 rounded-full transition-all"
-								style="width: {percentage}%"
-							></div>
-						</div>
-					</div>
-				{/each}
-			</div>
-		</div>
-
-		<!-- Sentiment Distribution -->
-		<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-			<h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">Sentiment Analysis</h2>
+	<!-- Sentiment Analysis -->
+	<!-- Sentiment Distribution -->
+		<div class="rounded-lg bg-card border border-border p-6 shadow">
+			<h2 class="mb-4 text-xl font-bold text-foreground">Sentiment Analysis</h2>
 			<div class="space-y-3">
 				{#each Object.entries(stats.sentimentCounts).sort((a, b) => b[1] - a[1]) as [sentiment, count]}
 					{@const percentage = ((count / stats.totalEntries) * 100).toFixed(1)}
@@ -199,11 +172,11 @@
 								: 'bg-muted-foreground/50'}
 					<div>
 						<div class="mb-1 flex items-center justify-between">
-							<span class="text-sm font-medium text-gray-700 capitalize dark:text-gray-300">
+							<span class="text-sm font-medium text-foreground capitalize">
 								{sentiment.toLowerCase()}
 								{sentiment === 'POSITIVE' ? '😊' : sentiment === 'NEGATIVE' ? '😢' : '😐'}
 							</span>
-							<span class="text-sm text-gray-500 dark:text-gray-400">
+							<span class="text-sm text-muted-foreground">
 								{count} ({percentage}%)
 							</span>
 						</div>
@@ -217,7 +190,6 @@
 				{/each}
 			</div>
 		</div>
-	</div>
 
 	<!-- Insights Section -->
 	<div class="bg-muted/50 rounded-lg p-6 shadow">
@@ -227,8 +199,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">🌱</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Just getting started</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Just getting started</p>
+						<p class="text-sm text-muted-foreground">
 							You're building a great habit! Try to journal regularly to unlock deeper insights
 							about your emotional patterns.
 						</p>
@@ -239,8 +211,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">🎉</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Amazing streak!</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Amazing streak!</p>
+						<p class="text-sm text-muted-foreground">
 							You've been journaling consistently for {stats.activeStreak} days. Keep up the great work!
 						</p>
 					</div>
@@ -251,8 +223,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">🌟</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Very positive outlook</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Very positive outlook</p>
+						<p class="text-sm text-muted-foreground">
 							Your recent entries show a very positive sentiment. You're doing great!
 						</p>
 					</div>
@@ -261,8 +233,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">💙</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">We notice tough times</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">We notice tough times</p>
+						<p class="text-sm text-muted-foreground">
 							Your entries suggest you might be going through a challenging period. Remember, it's
 							okay to seek support.
 						</p>
@@ -274,8 +246,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">📈</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Highly engaged</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Highly engaged</p>
+						<p class="text-sm text-muted-foreground">
 							You've journaled {stats.entriesLast30Days} times in the last month. Self-reflection is
 							a powerful habit!
 						</p>
@@ -285,8 +257,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">✨</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Building momentum</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Building momentum</p>
+						<p class="text-sm text-muted-foreground">
 							{stats.entriesLast30Days} entries in the past month. You're developing a consistent journaling habit!
 						</p>
 					</div>
@@ -295,8 +267,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">📝</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Making progress</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Making progress</p>
+						<p class="text-sm text-muted-foreground">
 							You have {stats.totalEntries} journal entries. Keep going to discover more patterns in your emotional journey!
 						</p>
 					</div>
@@ -307,8 +279,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">⚖️</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Balanced emotions</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Balanced emotions</p>
+						<p class="text-sm text-muted-foreground">
 							Your entries show a balanced emotional state. You're experiencing a mix of different feelings.
 						</p>
 					</div>
@@ -319,8 +291,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">🌱</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Just getting started</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Just getting started</p>
+						<p class="text-sm text-muted-foreground">
 							You're building a great habit! Try to journal regularly to unlock deeper insights
 							about your emotional patterns.
 						</p>
@@ -340,8 +312,8 @@
 				<div class="flex items-start gap-3">
 					<span class="text-2xl">📊</span>
 					<div>
-						<p class="font-medium text-gray-900 dark:text-white">Building your patterns</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
+						<p class="font-medium text-foreground">Building your patterns</p>
+						<p class="text-sm text-muted-foreground">
 							Keep journaling to discover patterns in your mood based on the day of the week and time
 							of day. We need at least 14 entries to show meaningful predictions.
 						</p>

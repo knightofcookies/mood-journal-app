@@ -26,8 +26,7 @@ export interface MoodPattern {
  * Analyze mood patterns and generate personalized recommendations
  */
 export function generateRecommendations(
-	recentEntries: Array<{ mood: string; content: string; sentimentScore: number; createdAt: Date }>,
-	moodPatterns: MoodPattern[]
+	recentEntries: Array<{ content: string; sentimentScore: number; createdAt: Date }>
 ): WellnessRecommendation[] {
 	const recommendations: WellnessRecommendation[] = [];
 
@@ -43,8 +42,7 @@ export function generateRecommendations(
 		(e) =>
 			e.content.toLowerCase().includes('anxious') ||
 			e.content.toLowerCase().includes('anxiety') ||
-			e.content.toLowerCase().includes('worried') ||
-			e.mood === 'anxious'
+			e.content.toLowerCase().includes('worried')
 	).length;
 
 	// Check for stress patterns
@@ -58,7 +56,6 @@ export function generateRecommendations(
 	// Check for sadness patterns
 	const sadnessMentions = recentEntries.filter(
 		(e) =>
-			e.mood === 'sad' ||
 			e.content.toLowerCase().includes('sad') ||
 			e.content.toLowerCase().includes('depressed')
 	).length;
@@ -190,19 +187,6 @@ export function generateRecommendations(
 		duration: '10 min',
 		priority: 'low'
 	});
-
-	// Pattern-based insights
-	const mostCommonMood = moodPatterns.sort((a, b) => b.frequency - a.frequency)[0];
-	if (mostCommonMood && mostCommonMood.frequency >= 5) {
-		recommendations.push({
-			id: 'pattern-insight',
-			type: 'insight',
-			title: `Your Most Common Mood: ${mostCommonMood.mood}`,
-			description: `You've felt ${mostCommonMood.mood} ${mostCommonMood.frequency} times recently. Understanding patterns is the first step to positive change.`,
-			icon: '📊',
-			priority: 'medium'
-		});
-	}
 
 	// Sort by priority and return
 	const priorityOrder = { high: 0, medium: 1, low: 2 };

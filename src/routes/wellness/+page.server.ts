@@ -22,18 +22,15 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
 		const recentEntries = await db
 			.select({
-				mood: table.entry.mood,
 				content: table.entry.content,
 				sentimentScore: table.entry.sentimentScore,
+				sentimentLabel: table.entry.sentimentLabel,
 				createdAt: table.entry.createdAt
 			})
 			.from(table.entry)
 			.where(eq(table.entry.userId, user.id))
 			.orderBy(desc(table.entry.createdAt))
 			.limit(50);
-
-		// Analyze mood patterns
-		const moodPatterns = analyzeMoodPatterns(recentEntries);
 
 		// Generate personalized recommendations (filter out null sentiment scores)
 		const validEntries = recentEntries
@@ -42,12 +39,10 @@ export const load: PageServerLoad = async ({ cookies }) => {
 				...e,
 				sentimentScore: e.sentimentScore!
 			}));
-		const recommendations = generateRecommendations(validEntries, moodPatterns);
+		const recommendations = generateRecommendations(validEntries);
 
 		// Get journaling prompts
-		const prompts = Array.from({ length: 5 }, () =>
-			getRandomPrompt(recentEntries.length > 0 ? recentEntries[0].mood : 'neutral')
-		);
+		const prompts = Array.from({ length: 5 }, () => getRandomPrompt());
 
 		// Get breathing exercises
 		const breathingExercises = BREATHING_EXERCISES;
@@ -57,7 +52,6 @@ export const load: PageServerLoad = async ({ cookies }) => {
 			recommendations,
 			prompts,
 			breathingExercises,
-			moodPatterns,
 			recentEntriesCount: recentEntries.length
 		};
 	} catch (error) {
@@ -67,32 +61,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 			recommendations: [],
 			prompts: [],
 			breathingExercises: [],
-			moodPatterns: [],
 			recentEntriesCount: 0
 		};
 	}
 };
-
-function analyzeMoodPatterns(
-	entries: Array<{ mood: string; sentimentScore: number | null; createdAt: Date }>
-) {
-	const moodCounts: Record<string, { count: number; totalSentiment: number }> = {};
-
-	for (const entry of entries) {
-		const mood = entry.mood;
-		const sentiment = entry.sentimentScore || 0;
-
-		if (!moodCounts[mood]) {
-			moodCounts[mood] = { count: 0, totalSentiment: 0 };
-		}
-
-		moodCounts[mood].count++;
-		moodCounts[mood].totalSentiment += sentiment;
-	}
-
-	return Object.entries(moodCounts).map(([mood, data]) => ({
-		mood,
-		frequency: data.count,
-		averageSentiment: data.totalSentiment / data.count
-	}));
-}

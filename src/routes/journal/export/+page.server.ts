@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { entry } from '$lib/server/db/schema';
-import { eq, desc, gte, lte, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.user;
@@ -15,7 +15,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.select({
 			id: entry.id,
 			content: entry.content,
-			mood: entry.mood,
 			sentimentScore: entry.sentimentScore,
 			sentimentLabel: entry.sentimentLabel,
 			createdAt: entry.createdAt

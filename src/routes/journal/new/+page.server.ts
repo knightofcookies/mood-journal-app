@@ -4,11 +4,10 @@ import { redirect, fail } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import * as table from '$lib/server/db/schema';
 import * as v from 'valibot';
-import { ContentSchema, MoodSchema } from '$lib/server/validation';
+import { ContentSchema } from '$lib/server/validation';
 import { storeEntryEmbedding } from '$lib/server/ai';
 import { updateUserAchievements } from '$lib/server/achievement-tracker';
-import { analyzeSentiment, detectMood } from '$lib/server/nlp';
-import { eq } from 'drizzle-orm';
+import { analyzeSentiment } from '$lib/server/nlp';
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	const token = cookies.get('auth-session');
@@ -20,7 +19,6 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
 const CreateSchema = v.object({
 	content: ContentSchema
-	// mood is no longer required - it's auto-generated from NLP
 });
 
 export const actions: Actions = {
@@ -45,7 +43,6 @@ export const actions: Actions = {
 
 			const data = {
 				content: String(form.get('content') || '').trim()
-				// mood is no longer from form - auto-generated from NLP
 			};
 
 			// Validate input
@@ -61,20 +58,16 @@ export const actions: Actions = {
 			// Analyze sentiment
 			let sentimentScore = 0;
 			let sentimentLabel: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' = 'NEUTRAL';
-			let autoMood = 'neutral';
 			
 			try {
 				const sentimentResult = await analyzeSentiment(parsed.output.content);
 				sentimentScore = Math.round(sentimentResult.normalizedScore * 100); // Convert to -100 to +100 scale
 				sentimentLabel = sentimentResult.label;
 				
-				// Auto-detect mood from text content using NLP
-				autoMood = detectMood(parsed.output.content, sentimentResult.normalizedScore);
-				
-				console.log('🔍 [Mood Detection]');
+				console.log('🔍 [Sentiment Analysis]');
 				console.log('   Content:', parsed.output.content);
 				console.log('   Sentiment:', sentimentResult.normalizedScore);
-				console.log('   Detected Mood:', autoMood);
+				console.log('   Label:', sentimentLabel);
 			} catch (sentimentError) {
 				console.error('[journal/new] Sentiment analysis failed:', sentimentError);
 				// Continue with default neutral sentiment
@@ -87,7 +80,7 @@ export const actions: Actions = {
 					id,
 					userId: user.id,
 					content: parsed.output.content,
-					mood: autoMood, // Auto-detected from NLP, not user input!
+					mood: null, // mood field is optional, can be null
 					sentimentScore,
 					sentimentLabel,
 					createdAt: now,
@@ -96,12 +89,7 @@ export const actions: Actions = {
 
 				// Generate embeddings for RAG (don't block on failure)
 				try {
-					const aiSettings = await db
-						.select()
-						.from(table.aiSettings)
-						.where(eq(table.aiSettings.userId, user.id))
-						.get();
-					await storeEntryEmbedding(id, parsed.output.content, aiSettings || null);
+					await storeEntryEmbedding(id);
 				} catch (embeddingError) {
 					console.error('[journal/new] Embedding generation failed:', embeddingError);
 					// Don't fail the entry creation if embedding fails
@@ -123,10 +111,14 @@ export const actions: Actions = {
 			// Redirect to the new entry
 			throw redirect(303, `/journal/${id}`);
 		} catch (error) {
-			// If it's a redirect, re-throw it
-			if (error instanceof Response && error.status === 303) {
-				throw error;
-			}
+				// If it's a redirect or other kit navigation response, re-throw it.
+				// SvelteKit throws Redirect objects (not a Response), which have a `status` and `location`.
+				// Detect any object with a numeric 3xx `status` and re-throw so the framework can handle it.
+				// Narrow `error` safely: check for an object with a numeric `status` property.
+				const maybeRedirect = error as unknown as { status?: unknown } | null;
+				if (maybeRedirect && typeof maybeRedirect.status === 'number' && maybeRedirect.status >= 300 && maybeRedirect.status < 400) {
+					throw error;
+				}
 			console.error('[journal/new] Unexpected error:', error);
 			return fail(500, { error: 'An unexpected error occurred' });
 		}

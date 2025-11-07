@@ -5,53 +5,63 @@
 
 @layer base {
 	:root {
+		/* Notion-like color scheme */
 		--background: 0 0% 100%;
-		--foreground: 240 10% 3.9%;
+		--foreground: 0 0% 9%;
 		--card: 0 0% 100%;
-		--card-foreground: 240 10% 3.9%;
+		--card-foreground: 0 0% 9%;
 		--popover: 0 0% 100%;
-		--popover-foreground: 240 10% 3.9%;
-		--primary: 240 5.9% 10%;
+		--popover-foreground: 0 0% 9%;
+		--primary: 0 0% 9%;
 		--primary-foreground: 0 0% 98%;
-		--secondary: 240 4.8% 95.9%;
-		--secondary-foreground: 240 5.9% 10%;
-		--muted: 240 4.8% 95.9%;
-		--muted-foreground: 240 3.8% 46.1%;
-		--accent: 240 4.8% 95.9%;
-		--accent-foreground: 240 5.9% 10%;
+		--secondary: 0 0% 96%;
+		--secondary-foreground: 0 0% 9%;
+		--muted: 0 0% 96%;
+		--muted-foreground: 0 0% 45%;
+		--accent: 0 0% 96%;
+		--accent-foreground: 0 0% 9%;
 		--destructive: 0 84.2% 60.2%;
 		--destructive-foreground: 0 0% 98%;
-		--border: 240 5.9% 90%;
-		--input: 240 5.9% 90%;
-		--ring: 240 5.9% 10%;
-		--radius: 0.5rem;
+		--border: 0 0% 93%;
+		--input: 0 0% 96%;
+		--ring: 0 0% 9%;
+		--radius: 0.375rem;
+		--sidebar-width: 240px;
+		--header-height: 0px;
 	}
 
 	.dark {
-		--background: 240 5% 8%;
-		--foreground: 240 5% 96%;
-		--card: 240 5% 10%;
-		--card-foreground: 240 5% 96%;
-		--popover: 240 5% 10%;
-		--popover-foreground: 240 5% 96%;
-		--primary: 240 5% 96%;
-		--primary-foreground: 240 6% 10%;
-		--secondary: 240 4% 16%;
-		--secondary-foreground: 240 5% 96%;
-		--muted: 240 4% 16%;
-		--muted-foreground: 240 5% 65%;
-		--accent: 240 4% 16%;
-		--accent-foreground: 240 5% 96%;
+		/* Notion dark mode colors */
+		--background: 0 0% 12%;
+		--foreground: 0 0% 98%;
+		--card: 0 0% 15%;
+		--card-foreground: 0 0% 98%;
+		--popover: 0 0% 15%;
+		--popover-foreground: 0 0% 98%;
+		--primary: 0 0% 98%;
+		--primary-foreground: 0 0% 9%;
+		--secondary: 0 0% 20%;
+		--secondary-foreground: 0 0% 98%;
+		--muted: 0 0% 20%;
+		--muted-foreground: 0 0% 65%;
+		--accent: 0 0% 20%;
+		--accent-foreground: 0 0% 98%;
 		--destructive: 0 63% 31%;
-		--destructive-foreground: 240 5% 96%;
-		--border: 240 4% 18%;
-		--input: 240 4% 18%;
-		--ring: 240 5% 84%;
+		--destructive-foreground: 0 0% 98%;
+		--border: 0 0% 24%;
+		--input: 0 0% 20%;
+		--ring: 0 0% 83%;
 	}
 
 	body {
 		background-color: hsl(var(--background));
 		color: hsl(var(--foreground));
+		font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+	}
+	
+	/* Notion-like smooth scrolling */
+	* {
+		scroll-behavior: smooth;
 	}
 }
 
@@ -76,4 +86,101 @@ html {
 .dark textarea::placeholder,
 .dark input::placeholder {
 	color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Notion-inspired styles */
+@layer components {
+	/* Smooth hover effects */
+	.notion-hover {
+		transition: all 150ms ease-out;
+	}
+	
+	/* Notion-like sidebar item */
+	.sidebar-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.375rem 0.5rem;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		line-height: 1.25rem;
+		color: hsl(var(--muted-foreground));
+		transition: all 150ms;
+		cursor: pointer;
+	}
+	
+	.sidebar-item:hover {
+		background-color: hsl(var(--accent));
+		color: hsl(var(--foreground));
+	}
+	
+	.sidebar-item.active {
+		background-color: hsl(var(--accent));
+		color: hsl(var(--foreground));
+	}
+	
+	/* Notion-like page container */
+	.notion-page {
+		max-width: 900px;
+		margin-left: auto;
+		margin-right: auto;
+		padding-left: 6rem;
+		padding-right: 6rem;
+		padding-top: 3rem;
+		padding-bottom: 3rem;
+	}
+	
+	/* Notion-like card */
+	.notion-card {
+		background-color: hsl(var(--card));
+		border-radius: 0.5rem;
+		border: 1px solid hsl(var(--border));
+		transition: all 200ms;
+		cursor: pointer;
+	}
+	
+	.notion-card:hover {
+		background-color: hsl(var(--accent) / 0.5);
+	}
+	
+	/* Notion-like input */
+	.notion-input {
+		width: 100%;
+		background-color: transparent;
+		border: none;
+		outline: none;
+		color: hsl(var(--foreground));
+	}
+	
+	.notion-input::placeholder {
+		color: hsl(var(--muted-foreground));
+	}
+	
+	/* Notion-like button */
+	.notion-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.375rem 0.75rem;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		line-height: 1.25rem;
+		font-weight: 500;
+		transition: all 150ms;
+	}
+	
+	.notion-btn:hover {
+		background-color: hsl(var(--accent));
+		color: hsl(var(--foreground));
+	}
+	
+	.notion-btn-primary {
+		background-color: hsl(var(--primary));
+		color: hsl(var(--primary-foreground));
+	}
+	
+	.notion-btn-primary:hover {
+		background-color: hsl(var(--primary) / 0.9);
+	}
 }

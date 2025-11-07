@@ -95,7 +95,6 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		return {
 			id: entry.id,
 			content: entry.content,
-			mood: entry.mood,
 			created_at: entry.createdAt,
 			similarity: Math.round(simData.similarity * 100),
 			preview: simData.preview

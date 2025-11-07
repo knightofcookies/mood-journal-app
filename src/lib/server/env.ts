@@ -1,31 +1,26 @@
 // Centralized environment loader using valibot with validation
 import * as v from 'valibot';
+import { env as svelteEnv } from '$env/dynamic/private';
 
 const EnvSchema = v.object({
 	// Required in production
 	DATABASE_URL: v.optional(v.pipe(v.string(), v.minLength(1)), './data/app.db'),
 	// Optional services
-	OLLAMA_BASE_URL: v.optional(v.string(), 'http://localhost:11434'),
-	OLLAMA_SENTIMENT_MODEL: v.optional(v.string(), 'llama3.2:1b'),
+	SENTIMENT_API_URL: v.optional(v.string(), 'http://localhost:5001'),
 	REDIS_URL: v.optional(v.string()),
-	OPENAI_API_KEY: v.optional(v.string()),
 	GROQ_API_KEY: v.optional(v.string()),
-	GEMINI_API_KEY: v.optional(v.string()),
 	GOOGLE_CLIENT_ID: v.optional(v.string()),
 	GOOGLE_CLIENT_SECRET: v.optional(v.string()),
 	GOOGLE_REDIRECT_URI: v.optional(v.string()),
 	NODE_ENV: v.optional(v.string(), 'development')
 });
 
-// Read from process.env so this works in Vitest and Node contexts
+// Read from SvelteKit's env system first, then fall back to process.env
 const keys = [
 	'DATABASE_URL',
-	'OLLAMA_BASE_URL',
-	'OLLAMA_SENTIMENT_MODEL',
+	'SENTIMENT_API_URL',
 	'REDIS_URL',
-	'OPENAI_API_KEY',
 	'GROQ_API_KEY',
-	'GEMINI_API_KEY',
 	'GOOGLE_CLIENT_ID',
 	'GOOGLE_CLIENT_SECRET',
 	'GOOGLE_REDIRECT_URI',
@@ -33,8 +28,15 @@ const keys = [
 ] as const;
 
 const raw = Object.fromEntries(
-	keys.map((k) => [k, process.env[k as keyof NodeJS.ProcessEnv]])
+	keys.map((k) => [k, svelteEnv[k] || process.env[k as keyof NodeJS.ProcessEnv]])
 ) as Record<string, string | undefined>;
+
+// Debug: Log GROQ_API_KEY status
+console.log('[env] GROQ_API_KEY check:', {
+	exists: !!process.env.GROQ_API_KEY,
+	length: process.env.GROQ_API_KEY?.length || 0,
+	first10: process.env.GROQ_API_KEY?.substring(0, 10) || 'undefined'
+});
 
 // Validate environment variables
 let validatedEnv;

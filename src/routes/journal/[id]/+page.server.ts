@@ -7,7 +7,7 @@ import { eq, and } from 'drizzle-orm';
 import * as v from 'valibot';
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
-import { ContentSchema, MoodSchema } from '$lib/server/validation';
+import { ContentSchema } from '$lib/server/validation';
 import { error } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ params, cookies }) => {
@@ -66,8 +66,7 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 };
 
 const UpdateSchema = v.object({
-	content: ContentSchema,
-	mood: MoodSchema
+	content: ContentSchema
 });
 
 export const actions: Actions = {
@@ -83,8 +82,7 @@ export const actions: Actions = {
 			const entryId = params.id;
 			const form = await request.formData();
 			const data = {
-				content: String(form.get('content') || '').trim(),
-				mood: String(form.get('mood') || 'neutral')
+				content: String(form.get('content') || '').trim()
 			};
 
 			const parsed = v.safeParse(UpdateSchema, data);
@@ -98,7 +96,6 @@ export const actions: Actions = {
 					.update(table.entry)
 					.set({
 						content: parsed.output.content,
-						mood: parsed.output.mood,
 						updatedAt: new Date()
 					})
 					.where(and(eq(table.entry.id, entryId), eq(table.entry.userId, user.id)));

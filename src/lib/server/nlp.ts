@@ -10,27 +10,28 @@ export type SentimentResult = {
 	normalizedScore: number; // -1 (very negative) to +1 (very positive)
 };
 
-// Ollama configuration
-const OLLAMA_BASE_URL = env.OLLAMA_BASE_URL || 'http://localhost:11434';
-const SENTIMENT_MODEL = env.OLLAMA_SENTIMENT_MODEL || 'gemma3:1b'; // Lightweight model for sentiment
+// Sentiment API configuration
+const SENTIMENT_API_URL = env.SENTIMENT_API_URL || 'http://localhost:5001';
 
 /**
- * Check if Ollama is available for sentiment analysis
+ * Check if the Python sentiment server is available
  */
-async function checkOllamaAvailable(): Promise<boolean> {
+async function checkSentimentServerAvailable(): Promise<boolean> {
 	try {
-		const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+		const response = await fetch(`${SENTIMENT_API_URL}/health`, {
 			method: 'GET',
 			signal: AbortSignal.timeout(2000)
 		});
-		return response.ok;
+		if (!response.ok) return false;
+		const data = await response.json();
+		return data.status === 'healthy' && data.model_loaded === true;
 	} catch {
 		return false;
 	}
 }
 
 /**
- * Analyze sentiment using Ollama with fallback to lexicon-based approach
+ * Analyze sentiment using Python DistilBERT server with fallback to lexicon-based approach
  * @param text - The text to analyze (journal entry content)
  * @returns Sentiment result with label, confidence score, and normalized score
  */
@@ -59,73 +60,51 @@ export async function analyzeSentiment(text: string): Promise<SentimentResult> {
 		};
 	}
 
-	// Try Ollama first, fallback to lexicon-based analysis
-	const isOllamaAvailable = await checkOllamaAvailable();
+	// Try Python server first, fallback to lexicon-based analysis
+	const isServerAvailable = await checkSentimentServerAvailable();
 
-	if (isOllamaAvailable) {
+	if (isServerAvailable) {
 		try {
-			return await analyzeSentimentWithOllama(cleanText);
+			return await analyzeSentimentWithDistilBERT(cleanText);
 		} catch (error) {
-			console.warn('Ollama sentiment analysis failed, falling back to lexicon:', error);
+			console.warn('DistilBERT sentiment analysis failed, falling back to lexicon:', error);
 			return analyzeSentimentLexicon(cleanText);
 		}
 	}
 
 	// Fallback to lexicon-based analysis
+	console.warn('Sentiment server unavailable, using lexicon-based analysis');
 	return analyzeSentimentLexicon(cleanText);
 }
 
 /**
- * Analyze sentiment using Ollama
+ * Analyze sentiment using Python DistilBERT server
  */
-async function analyzeSentimentWithOllama(text: string): Promise<SentimentResult> {
-	const maxLength = 500;
-	const textToAnalyze = text.length > maxLength ? text.substring(0, maxLength) : text;
-
-	const prompt = `Analyze the sentiment of this text and respond with ONLY one word: POSITIVE, NEGATIVE, or NEUTRAL.
-
-Text: "${textToAnalyze}"
-
-Sentiment:`;
-
-	const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+async function analyzeSentimentWithDistilBERT(text: string): Promise<SentimentResult> {
+	const response = await fetch(`${SENTIMENT_API_URL}/analyze`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			model: SENTIMENT_MODEL,
-			prompt,
-			stream: false,
-			options: {
-				temperature: 0.1,
-				num_predict: 10
-			}
-		}),
+		body: JSON.stringify({ text }),
 		signal: AbortSignal.timeout(10000)
 	});
 
 	if (!response.ok) {
-		throw new Error('Ollama request failed');
+		const errorText = await response.text();
+		throw new Error(`Sentiment API request failed: ${response.status} ${errorText}`);
 	}
 
 	const data = await response.json();
-	const result = data.response?.trim().toUpperCase() || '';
 
-	// Parse the response
-	let label: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' = 'NEUTRAL';
-	if (result.includes('POSITIVE')) {
-		label = 'POSITIVE';
-	} else if (result.includes('NEGATIVE')) {
-		label = 'NEGATIVE';
-	}
-
-	// Estimate confidence based on lexicon as well
-	const lexiconResult = analyzeSentimentLexicon(text);
-	const score = Math.abs(lexiconResult.normalizedScore) > 0.3 ? 0.8 : 0.6;
+	// Convert Python server response to our format
+	// Server returns: { label: "POSITIVE"|"NEGATIVE"|"NEUTRAL", score: -100 to +100, confidence: 0-1 }
+	const label = data.label as 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+	const confidence = data.confidence; // 0 to 1
+	const normalizedScore = data.score / 100; // Convert -100 to +100 → -1 to +1
 
 	return {
 		label,
-		score,
-		normalizedScore: label === 'POSITIVE' ? score : label === 'NEGATIVE' ? -score : 0
+		score: confidence,
+		normalizedScore
 	};
 }
 
@@ -299,144 +278,6 @@ export function getSentimentColor(normalizedScore: number): string {
 	if (normalizedScore > 0.3) return 'text-green-500';
 	if (normalizedScore < -0.3) return 'text-red-500';
 	return 'text-yellow-500';
-}
-
-/**
- * Detect specific mood from text content using keyword analysis
- * Returns a more nuanced mood classification than just positive/negative/neutral
- */
-export function detectMood(text: string, sentimentScore: number): string {
-	const lowerText = text.toLowerCase();
-	
-	// Expanded keyword dictionaries for different moods
-	const sadKeywords = [
-		'sad', 'sadness', 'depressed', 'depression', 'hopeless', 'worthless',
-		'lonely', 'alone', 'crying', 'cry', 'tears', 'hurt', 'pain', 'miserable',
-		'devastated', 'heartbroken', 'grief', 'sorrow', 'unhappy', 'down', 'low'
-	];
-	
-	const anxiousKeywords = [
-		'anxious', 'anxiety', 'worried', 'worry', 'nervous', 'panic', 'scared', 
-		'fear', 'afraid', 'terrified', 'uneasy', 'tense', 'restless', 'overwhelmed'
-	];
-	
-	const stressedKeywords = [
-		'stressed', 'stress', 'overwhelmed', 'pressure', 'deadline', 'busy', 
-		'exhausted', 'tired', 'drained', 'burnt out', 'burnout', 'overworked',
-		'swamped', 'hectic', 'chaotic'
-	];
-	
-	const excitedKeywords = [
-		'excited', 'excitement', 'thrilled', 'amazing', 'awesome', 'incredible', 
-		'fantastic', 'wonderful', 'great news', 'can\'t wait', 'looking forward',
-		'pumped', 'stoked', 'enthusiastic'
-	];
-	
-	const calmKeywords = [
-		'calm', 'peaceful', 'relaxed', 'serene', 'tranquil', 'content', 
-		'at peace', 'centered', 'balanced', 'grounded', 'meditat', 'zen',
-		'composed', 'settled'
-	];
-	
-	const angryKeywords = [
-		'angry', 'anger', 'furious', 'mad', 'frustrated', 'annoyed', 'irritated', 
-		'rage', 'outraged', 'infuriated', 'pissed', 'upset', 'livid', 'enraged'
-	];
-	
-	const happyKeywords = [
-		'happy', 'happiness', 'joy', 'joyful', 'glad', 'delighted', 'pleased',
-		'grateful', 'thankful', 'blessed', 'cheerful', 'content', 'satisfied',
-		'great day', 'wonderful', 'excellent', 'good day', 'productive'
-	];
-	
-	// Count keyword matches
-	let sadCount = 0;
-	let anxiousCount = 0;
-	let stressedCount = 0;
-	let excitedCount = 0;
-	let calmCount = 0;
-	let angryCount = 0;
-	let happyCount = 0;
-	
-	sadKeywords.forEach(keyword => {
-		if (lowerText.includes(keyword)) sadCount++;
-	});
-	
-	anxiousKeywords.forEach(keyword => {
-		if (lowerText.includes(keyword)) anxiousCount++;
-	});
-	
-	stressedKeywords.forEach(keyword => {
-		if (lowerText.includes(keyword)) stressedCount++;
-	});
-	
-	excitedKeywords.forEach(keyword => {
-		if (lowerText.includes(keyword)) excitedCount++;
-	});
-	
-	calmKeywords.forEach(keyword => {
-		if (lowerText.includes(keyword)) calmCount++;
-	});
-	
-	angryKeywords.forEach(keyword => {
-		if (lowerText.includes(keyword)) angryCount++;
-	});
-	
-	happyKeywords.forEach(keyword => {
-		if (lowerText.includes(keyword)) happyCount++;
-	});
-	
-	// Determine the dominant specific mood
-	const moodScores = [
-		{ mood: 'sad', score: sadCount },
-		{ mood: 'anxious', score: anxiousCount },
-		{ mood: 'stressed', score: stressedCount },
-		{ mood: 'excited', score: excitedCount },
-		{ mood: 'calm', score: calmCount },
-		{ mood: 'angry', score: angryCount },
-		{ mood: 'happy', score: happyCount }
-	];
-	
-	// Sort by score descending
-	moodScores.sort((a, b) => b.score - a.score);
-	
-	// Debug logging
-	console.log('🧠 [detectMood] Analysis:');
-	console.log('   Text:', text.substring(0, 60));
-	console.log('   Sentiment Score:', sentimentScore);
-	console.log('   Keyword Counts:', {
-		sad: sadCount,
-		anxious: anxiousCount,
-		stressed: stressedCount,
-		excited: excitedCount,
-		calm: calmCount,
-		angry: angryCount,
-		happy: happyCount
-	});
-	console.log('   Top Mood:', moodScores[0]);
-	
-	// If a specific mood has at least 1 keyword match, use it
-	if (moodScores[0].score >= 1) {
-		const topMood = moodScores[0].mood;
-		
-		// Validate alignment with sentiment for edge cases
-		// Positive moods should align with positive sentiment
-		if ((topMood === 'excited' || topMood === 'calm' || topMood === 'happy') && sentimentScore < -0.5) {
-			// Strong negative sentiment overrides positive keyword
-			return 'sad';
-		}
-		// Negative moods are generally reliable
-		return topMood;
-	}
-	
-	// Fall back to sentiment-based mood
-	if (sentimentScore > 0.3) {
-		return 'happy';
-	} else if (sentimentScore < -0.3) {
-		return 'sad';
-	} else {
-		return 'neutral';
-	}
 }
 
 /**
@@ -683,74 +524,27 @@ export function extractKeywords(text: string, maxKeywords: number = 5): string[]
 }
 
 /**
- * Extract named entities (people, places, etc.) using simple pattern matching
- * This is a basic implementation - could be enhanced with an NER model
- * @param text - The text to extract entities from
- * @returns Array of extracted entities
- */
-export function extractEntities(text: string): string[] {
-	if (!text || text.trim().length < 10) {
-		return [];
-	}
-
-	const entities = new Set<string>();
-
-	// Pattern 1: Capitalized words (potential names/places)
-	// Match 2-3 consecutive capitalized words
-	const capitalizedPattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g;
-	const capitalizedMatches = text.matchAll(capitalizedPattern);
-
-	for (const match of capitalizedMatches) {
-		const entity = match[1];
-		// Filter out sentence starts and common words
-		if (
-			entity.length > 2 &&
-			!entity.match(
-				/^(The|This|That|Today|Tomorrow|Yesterday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December)/
-			)
-		) {
-			entities.add(entity);
-		}
-	}
-
-	// Pattern 2: Quoted names/places
-	const quotedPattern = /"([^"]+)"/g;
-	const quotedMatches = text.matchAll(quotedPattern);
-
-	for (const match of quotedMatches) {
-		if (match[1].length > 2 && match[1].length < 50) {
-			entities.add(match[1]);
-		}
-	}
-
-	return Array.from(entities).slice(0, 10); // Limit to 10 entities
-}
-
-/**
  * Combined analysis result including sentiment and keywords
  */
 export type FullAnalysisResult = {
 	sentiment: SentimentResult;
 	keywords: string[];
-	entities: string[];
 };
 
 /**
  * Perform full NLP analysis on text
  * @param text - The text to analyze
- * @returns Complete analysis with sentiment, keywords, and entities
+ * @returns Complete analysis with sentiment and keywords
  */
 export async function analyzeText(text: string): Promise<FullAnalysisResult> {
-	const [sentiment, keywords, entities] = await Promise.all([
+	const [sentiment, keywords] = await Promise.all([
 		analyzeSentiment(text),
-		Promise.resolve(extractKeywords(text, 5)),
-		Promise.resolve(extractEntities(text))
+		Promise.resolve(extractKeywords(text, 5))
 	]);
 
 	return {
 		sentiment,
-		keywords,
-		entities
+		keywords
 	};
 }
 
@@ -932,340 +726,4 @@ export function findSimilarEntries(
 		.filter((s) => s.similarity > 0.2) // Minimum 20% similarity
 		.sort((a, b) => b.similarity - a.similarity)
 		.slice(0, limit);
-}
-
-/**
- * Cognitive distortion types (from CBT)
- */
-export type DistortionType =
-	| 'all-or-nothing'
-	| 'overgeneralization'
-	| 'mental-filter'
-	| 'disqualifying-positive'
-	| 'jumping-to-conclusions'
-	| 'magnification'
-	| 'emotional-reasoning'
-	| 'should-statements'
-	| 'labeling'
-	| 'personalization';
-
-export type CognitiveDistortion = {
-	type: DistortionType;
-	label: string;
-	confidence: number;
-	excerpt: string; // The text snippet showing the distortion
-	explanation: string;
-};
-
-export type ReframingResult = {
-	distortions: CognitiveDistortion[];
-	reframes: string[];
-	socratics: string[];
-	positiveAnchors: string[];
-};
-
-/**
- * Detect cognitive distortions in journal text using pattern matching and LLM
- */
-export async function detectCognitiveDistortions(text: string): Promise<CognitiveDistortion[]> {
-	if (!text || text.trim().length < 10) {
-		return [];
-	}
-
-	const distortions: CognitiveDistortion[] = [];
-
-	// Pattern-based detection for common distortions
-	const lowerText = text.toLowerCase();
-	const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 5);
-
-	// All-or-nothing thinking patterns
-	const allOrNothingPatterns = [
-		/\b(always|never|every|all|nothing|no one|everyone)\b/i,
-		/\b(completely|totally|absolutely|entirely)\s+(failed|ruined|destroyed|perfect)/i
-	];
-
-	for (const sentence of sentences) {
-		for (const pattern of allOrNothingPatterns) {
-			if (pattern.test(sentence)) {
-				distortions.push({
-					type: 'all-or-nothing',
-					label: 'All-or-Nothing Thinking',
-					confidence: 0.7,
-					excerpt: sentence.trim().slice(0, 100),
-					explanation: 'Viewing situations in black-and-white categories without middle ground.'
-				});
-				break;
-			}
-		}
-	}
-
-	// Overgeneralization patterns
-	const overgenPatterns = [
-		/\b(always happens?|never works?|every time|typical)\b/i,
-		/\b(again|once again)\b/i
-	];
-
-	for (const sentence of sentences) {
-		for (const pattern of overgenPatterns) {
-			if (pattern.test(sentence) && sentence.toLowerCase().includes('never')) {
-				distortions.push({
-					type: 'overgeneralization',
-					label: 'Overgeneralization',
-					confidence: 0.65,
-					excerpt: sentence.trim().slice(0, 100),
-					explanation: 'Drawing broad conclusions from a single event or limited evidence.'
-				});
-				break;
-			}
-		}
-	}
-
-	// Should statements
-	const shouldPatterns = [/\b(should|shouldn't|ought to|must|have to|need to|supposed to)\b/i];
-
-	let shouldCount = 0;
-	for (const sentence of sentences) {
-		for (const pattern of shouldPatterns) {
-			if (pattern.test(sentence)) {
-				shouldCount++;
-				if (shouldCount === 1) {
-					distortions.push({
-						type: 'should-statements',
-						label: 'Should Statements',
-						confidence: 0.6,
-						excerpt: sentence.trim().slice(0, 100),
-						explanation: 'Using "should" or "must" statements can create guilt and pressure.'
-					});
-				}
-				break;
-			}
-		}
-	}
-
-	// Catastrophizing (magnification)
-	const catastrophePatterns = [
-		/\b(disaster|catastrophe|terrible|awful|worst|horrible|ruined)\b/i,
-		/\b(can't stand|unbearable|intolerable)\b/i
-	];
-
-	for (const sentence of sentences) {
-		for (const pattern of catastrophePatterns) {
-			if (pattern.test(sentence)) {
-				distortions.push({
-					type: 'magnification',
-					label: 'Catastrophizing',
-					confidence: 0.68,
-					excerpt: sentence.trim().slice(0, 100),
-					explanation: 'Magnifying negatives and expecting the worst-case scenario.'
-				});
-				break;
-			}
-		}
-	}
-
-	// Emotional reasoning
-	const emotionalPatterns = [
-		/\b(feel|felt|feeling)\s+(like|that).+\b(therefore|so|must be)\b/i,
-		/because\s+i\s+feel/i
-	];
-
-	for (const sentence of sentences) {
-		for (const pattern of emotionalPatterns) {
-			if (pattern.test(sentence)) {
-				distortions.push({
-					type: 'emotional-reasoning',
-					label: 'Emotional Reasoning',
-					confidence: 0.62,
-					excerpt: sentence.trim().slice(0, 100),
-					explanation: 'Assuming that feelings reflect reality ("I feel it, so it must be true").'
-				});
-				break;
-			}
-		}
-	}
-
-	// Try LLM-based detection if Ollama is available (for more nuanced detection)
-	const isOllamaAvailable = await checkOllamaAvailable();
-	if (isOllamaAvailable && distortions.length < 3) {
-		try {
-			const llmDistortions = await detectDistortionsWithLLM(text);
-			distortions.push(...llmDistortions);
-		} catch (error) {
-			console.warn('LLM distortion detection failed:', error);
-		}
-	}
-
-	// Remove duplicates and sort by confidence
-	const uniqueDistortions = Array.from(new Map(distortions.map((d) => [d.type, d])).values()).sort(
-		(a, b) => b.confidence - a.confidence
-	);
-
-	return uniqueDistortions.slice(0, 5); // Return top 5
-}
-
-/**
- * LLM-based distortion detection for more nuanced analysis
- */
-async function detectDistortionsWithLLM(text: string): Promise<CognitiveDistortion[]> {
-	const maxLength = 400;
-	const textToAnalyze = text.length > maxLength ? text.substring(0, maxLength) : text;
-
-	const prompt = `Analyze this journal entry for cognitive distortions. List any you find from: all-or-nothing, overgeneralization, catastrophizing, should-statements, emotional-reasoning.
-
-Text: "${textToAnalyze}"
-
-List the distortions found (comma-separated) or "none":`;
-
-	const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			model: SENTIMENT_MODEL,
-			prompt,
-			stream: false,
-			options: {
-				temperature: 0.2,
-				num_predict: 50
-			}
-		}),
-		signal: AbortSignal.timeout(8000)
-	});
-
-	if (!response.ok) {
-		throw new Error('Ollama request failed');
-	}
-
-	const data = await response.json();
-	const result = data.response?.trim().toLowerCase() || '';
-
-	const distortions: CognitiveDistortion[] = [];
-
-	if (result.includes('all-or-nothing') || result.includes('black')) {
-		distortions.push({
-			type: 'all-or-nothing',
-			label: 'All-or-Nothing Thinking',
-			confidence: 0.75,
-			excerpt: textToAnalyze.slice(0, 100),
-			explanation: 'Viewing situations in extremes without middle ground.'
-		});
-	}
-
-	if (result.includes('overgeneralization')) {
-		distortions.push({
-			type: 'overgeneralization',
-			label: 'Overgeneralization',
-			confidence: 0.73,
-			excerpt: textToAnalyze.slice(0, 100),
-			explanation: 'Drawing broad conclusions from limited evidence.'
-		});
-	}
-
-	if (result.includes('catastroph')) {
-		distortions.push({
-			type: 'magnification',
-			label: 'Catastrophizing',
-			confidence: 0.72,
-			excerpt: textToAnalyze.slice(0, 100),
-			explanation: 'Expecting the worst-case scenario.'
-		});
-	}
-
-	return distortions;
-}
-
-/**
- * Generate reframing suggestions for detected distortions
- */
-export function generateReframes(
-	distortions: CognitiveDistortion[],
-	text: string
-): ReframingResult {
-	const reframes: string[] = [];
-	const socratics: string[] = [];
-
-	for (const distortion of distortions) {
-		switch (distortion.type) {
-			case 'all-or-nothing':
-				reframes.push(
-					'Consider: What shades of gray exist between these extremes? What partial successes or progress have you made?'
-				);
-				socratics.push('What evidence supports a more balanced view of this situation?');
-				break;
-
-			case 'overgeneralization':
-				reframes.push(
-					'Reframe: This is one situation, not a pattern. What other times have things worked differently?'
-				);
-				socratics.push(
-					'Can you think of exceptions to this pattern? What makes this specific instance unique?'
-				);
-				break;
-
-			case 'magnification':
-				reframes.push(
-					"Reality check: In a year, how much will this matter? What's the most likely outcome, not the worst?"
-				);
-				socratics.push(
-					"If a friend told you this, what would you say? What's a realistic assessment?"
-				);
-				break;
-
-			case 'should-statements':
-				reframes.push(
-					'Replace "should" with "I prefer" or "it would be nice if." Remove pressure and guilt.'
-				);
-				socratics.push(
-					'Who says it "should" be this way? What would be a more flexible expectation?'
-				);
-				break;
-
-			case 'emotional-reasoning':
-				reframes.push(
-					"Separate feelings from facts: Just because you feel something doesn't make it objectively true."
-				);
-				socratics.push(
-					'What objective evidence exists beyond this feeling? What would an outside observer see?'
-				);
-				break;
-
-			default:
-				reframes.push('Try viewing this situation from a different angle or perspective.');
-				socratics.push('What alternative explanations exist for what happened?');
-		}
-	}
-
-	// Extract positive anchors (positive statements to remember)
-	const positiveAnchors = extractPositiveAnchors(text);
-
-	return {
-		distortions,
-		reframes: [...new Set(reframes)].slice(0, 3),
-		socratics: [...new Set(socratics)].slice(0, 3),
-		positiveAnchors
-	};
-}
-
-/**
- * Extract positive evidence statements from text
- */
-function extractPositiveAnchors(text: string): string[] {
-	const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 10);
-	const anchors: string[] = [];
-
-	const positivePatterns = [
-		/\b(grateful|thankful|appreciate|accomplished|proud|success|achieved|happy|joy)\b/i,
-		/\b(better|improved|progress|growing|learned|realized)\b/i,
-		/\b(love|care|support|help|friend|family)\b/i
-	];
-
-	for (const sentence of sentences) {
-		for (const pattern of positivePatterns) {
-			if (pattern.test(sentence)) {
-				anchors.push(sentence.trim());
-				break;
-			}
-		}
-	}
-
-	return anchors.slice(0, 3);
 }

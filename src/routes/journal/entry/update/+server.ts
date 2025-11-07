@@ -48,14 +48,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			return json({ ok: false, error: `Validation failed: ${errors}` }, { status: 400 });
 		}
 
-		const { id, content, mood } = parseResult.output;
+		const { id, content } = parseResult.output;
 		const now = new Date();
 
 		// Update entry with authorization check
 		try {
 			const result = await db
 				.update(table.entry)
-				.set({ content, mood, updatedAt: now })
+				.set({ content, updatedAt: now })
 				.where(and(eq(table.entry.id, id), eq(table.entry.userId, user.id)))
 				.returning({ id: table.entry.id });
 
@@ -63,7 +63,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				return json({ ok: false, error: 'Entry not found or access denied' }, { status: 404 });
 			}
 
-			return json({ ok: true, entry: { id, content, mood, updatedAt: now.toISOString() } });
+			return json({ ok: true, entry: { id, content, updatedAt: now.toISOString() } });
 		} catch (dbError) {
 			console.error('[entry/update] Database error:', dbError);
 			return json({ ok: false, error: 'Failed to update entry' }, { status: 500 });
