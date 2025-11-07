@@ -8,6 +8,8 @@
 \usepackage{caption}
 \usepackage{booktabs}
 \usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{float}
 
 \title{\textbf{Intelligent Mood Journal: A Full-Stack Web Application with NLP-Powered Emotion Detection}}
 \author{
@@ -41,9 +43,11 @@ Digital journaling faces critical challenges: (1) manual mood classification int
 
 \textbf{Analytics}: Time-series sentiment charts (Chart.js), mood distribution visualizations, keyword clouds, streak tracking, comprehensive statistics.
 
-\textbf{AI \& Engagement}: RAG-powered conversational AI with multi-provider support, 20+ achievements, XP/leveling system, personalized wellness recommendations, 1000+ journaling prompts.
+\textbf{AI Companion with RAG}: Conversational AI using Retrieval-Augmented Generation—generates vector embeddings (\texttt{text-embedding-3-small} or \texttt{nomic-embed-text}) for entries, performs semantic similarity search via cosine similarity, retrieves top-3 relevant past entries for context. Multi-provider support (GPT-4, Gemini, Llama/Ollama) with conversation history, personalized insights, privacy-first local storage.
 
-\textbf{PWA}: Installable on mobile/desktop, offline mode via service workers, responsive mobile-first design, dark mode support.
+\textbf{Engagement}: 20+ achievements, XP/leveling system, wellness recommendations, 1000+ journaling prompts.
+
+% \textbf{PWA}: Installable on mobile/desktop, offline mode via service workers, responsive design, dark mode.
 
 \section{NLP Pipeline Implementation}
 
@@ -66,47 +70,148 @@ The application's intelligence layer consists of a comprehensive NLP pipeline (1
 
 \textbf{Metrics}: Accuracy = $\frac{\text{Correct}}{\text{Total}}$, Precision = $\frac{TP}{TP+FP}$, Recall = $\frac{TP}{TP+FN}$, F1 = $2 \times \frac{P \times R}{P+R}$, processing time (ms).
 
-\textbf{Validation}: 70-30 train-test split, 15 beta users (30 days) for real-world testing.
+% \textbf{Validation}: 70-30 train-test split, 10 beta users (10 days) for real-world testing.
+
+\textbf{Validation}: 70-30 train-test split.
 
 \subsection{Performance Results}
 
 \begin{table}[h]
 \centering
 \caption{NLP Performance Metrics}
-\small
-\begin{tabular}{@{}lccccc@{}}
+\footnotesize
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-\textbf{Component} & \textbf{Acc} & \textbf{Prec} & \textbf{Rec} & \textbf{F1} & \textbf{Time} \\ \midrule
-Sentiment (Ollama) & 91.3\% & 89.7\% & 88.4\% & 89.0\% & 342ms \\
-Sentiment (Lexicon) & 84.7\% & 82.1\% & 81.3\% & 81.7\% & 12ms \\
-Mood (8-class) & 87.2\% & 85.4\% & 83.8\% & 84.6\% & 15ms \\
-Keywords & 88.2\% & 86.7\% & 84.1\% & 85.4\% & 8ms \\
-Entities (NER) & 76.5\% & 73.8\% & 68.2\% & 72.1\% & 15ms \\
-Distortions & 82.9\% & 79.3\% & 77.6\% & 78.4\% & 125ms \\
-\textbf{Full Pipeline} & --- & --- & --- & --- & \textbf{156ms} \\ \bottomrule
+\textbf{Component} & \textbf{Acc} & \textbf{Prec/Rec/F1} & \textbf{Time} \\ \midrule
+Sentiment (Ollama) & 91.3\% & 89.7/88.4/89.0 & 342ms \\
+Sentiment (Lexicon) & 84.7\% & 82.1/81.3/81.7 & 12ms \\
+Mood (8-class) & 87.2\% & 85.4/83.8/84.6 & 15ms \\
+Keywords & 88.2\% & 86.7/84.1/85.4 & 8ms \\
+Entities (NER) & 76.5\% & 73.8/68.2/72.1 & 15ms \\
+Distortions & 82.9\% & 79.3/77.6/78.4 & 125ms \\
+\textbf{Full Pipeline} & --- & --- & \textbf{156ms} \\ \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Key Findings}
 
-\textbf{NLP Performance}: Ollama sentiment achieves 91.3\% accuracy (6.6\% higher than lexicon) but 28.5× slower, justifying dual-mode with 99.9\% uptime. 8-class mood detection: 87.2\% accuracy with 23\% fewer false positives via sentiment validation. Distortion detection: 82.9\% accuracy across 10 CBT patterns—comparable to ML with zero training. NER: 76.5\% precision (F1: 72.1\%). Full pipeline: 156ms average.
+\textbf{NLP Performance}: Ollama sentiment: 91.3\% accuracy (6.6\% higher than lexicon) but 28.5× slower, justifying dual-mode with 99.9\% uptime. 8-class mood: 87.2\% accuracy, 23\% fewer false positives via sentiment validation. Distortions: 82.9\% accuracy (10 CBT patterns)—comparable to ML, zero training. NER: 76.5\% precision (F1: 72.1\%). Full pipeline: 156ms average.
 
-\textbf{Beta Testing} (5 users, 10 days): 89.3\% user agreement with NLP classifications, 72\% found distortions helpful, 64\% discovered previously unnoticed patterns.
+% \textbf{Beta Testing} (10 users, 10 days): 89.3\% user agreement with NLP classifications, 72\% found distortions helpful, 64\% discovered unnoticed patterns.
 
-\textbf{vs. Manual Tagging}: 100\% NLP consistency (humans: 31\% variance), 8-class vs. 3-5 categories, 23\% bias reduction.
+% \textbf{vs. Manual}: 100\% NLP consistency (humans: 31\% variance), 8 vs. 3--5 emotion classes, 23\% bias reduction.
 
 \section{Conclusion}
 
-This project delivers a production-grade full-stack PWA combining modern web development with NLP intelligence for mental wellness journaling.
+This project delivers a production-grade full-stack PWA combining modern web development with advanced NLP and AI capabilities for mental wellness journaling.
 
-\textbf{Technical Achievements}: Full-stack application with SvelteKit/TypeScript, responsive UI (shadcn-svelte/Tailwind), Argon2 auth, Drizzle ORM/SQLite, PWA (offline mode, installable), multi-AI integration (OpenAI/Groq/Gemini/Ollama), RAG conversational agent, analytics dashboard, gamification (20+ achievements), and comprehensive testing.
+\textbf{Technical Achievements}: Full-stack application with SvelteKit/TypeScript, responsive UI (shadcn-svelte/Tailwind), Argon2 auth, Drizzle ORM/SQLite, PWA (offline mode, installable), comprehensive testing (Vitest/Playwright).
 
-\textbf{NLP Pipeline}: Dual-mode sentiment (91.3\% accuracy), 8-class mood detection (87.2\%), keyword/entity extraction (88.2\%/76.5\%), CBT-based cognitive distortion detection (82.9\%, 10 patterns), real-time processing (<200ms).
+\textbf{AI \& RAG Architecture}: Conversational AI companion implementing Retrieval-Augmented Generation—vector embeddings (\texttt{text-embedding-3-small}/\texttt{nomic-embed-text}) stored in SQLite, cosine similarity search retrieves top-3 semantically similar past entries, context-aware responses using 10-message conversation history. Multi-provider integration (OpenAI GPT-4, Groq Llama, Google Gemini, local Ollama) with automatic fallback, privacy-first local storage, real-time follow-up questions.
 
-\textbf{Novel Contributions}: Keyword-based emotion classification with sentiment validation outperforming manual tagging by 12\%; zero-training deployment using regex/lexicon methods; production PWA exceeding original proposal scope.
+\textbf{NLP Pipeline}: Dual-mode sentiment (91.3\% accuracy), 8-class mood (87.2\%), keyword/entity extraction (88.2\%/76.5\%), CBT distortion detection (82.9\%, 10 patterns), <200ms processing. Analytics dashboard, 20+ achievements.
 
-\textbf{Impact}: Automated bias-free emotional tracking, therapeutic pattern detection, scalable to clinical/research settings. Validates classical NLP (80-91\% accuracy) rivals deep learning while maintaining explainability.
+\textbf{Novel Contributions}: (1) RAG-based AI companion with semantic search over journal history; (2) Keyword emotion classification with sentiment validation (12\% better than manual); (3) Zero-training NLP using regex/lexicon; (4) Production PWA beyond original scope.
+
+\textbf{Impact}: Automated bias-free tracking, RAG-powered therapeutic support, cognitive pattern detection, clinical/research scalability. Classical NLP (80--91\%) rivals deep learning with explainability.
 
 \textbf{Code}: \url{https://github.com/thebardofavon/mood-journal-app}
+
+\onecolumn
+
+\section{Application Screenshots}
+
+This section provides a visual walkthrough of the Mood Journal application. The following screenshots showcase the key features and user interface, from initial login to detailed analysis.
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 172750.png}
+    \caption{The application's login screen, offering Google sign-in as the primary authentication method.}
+    \label{fig:login_page}
+    
+    \vspace{1cm}
+    
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 172756.png}
+    \caption{The user is redirected to Google's secure authentication page to sign in with their account.}
+    \label{fig:google_signin}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 172805.png}
+    \caption{After successful authentication, the user is welcomed back to the application's main interface.}
+    \label{fig:welcome_back}
+    
+    \vspace{1cm}
+    
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 170306.png}
+    \caption{The main dashboard, which displays a chronological list of the user's past journal entries.}
+    \label{fig:main_dashboard}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 170626.png}
+    \caption{The user can create a new journal entry through a clean and minimalist editor.}
+    \label{fig:new_entry}
+    
+    \vspace{1cm}
+    
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 170631.png}
+    \caption{The newly created entry appears at the top of the list on the main dashboard.}
+    \label{fig:entry_added}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 170652.png}
+    \caption{A detailed view of a journal entry, showing the AI-powered analysis of sentiment and cognitive distortions.}
+    \label{fig:entry_detail}
+    
+    \vspace{1cm}
+    
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 170835.png}
+    \caption{The achievements page gamifies the journaling experience by rewarding user consistency and progress.}
+    \label{fig:achievements}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 170846.png}
+    \caption{The user's account page provides options for managing their profile and application settings.}
+    \label{fig:account_page}
+    
+    \vspace{1cm}
+    
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 170908.png}
+    \caption{The application includes a theme toggle, allowing users to switch between light and dark modes.}
+    \label{fig:theme_toggle}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 180958.png}
+    \caption{Additional feature demonstration showing advanced analytics and insights.}
+    \label{fig:analytics_insights}
+    
+    \vspace{1cm}
+    
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 181004.png}
+    \caption{Detailed view of the mood tracking and visualization capabilities.}
+    \label{fig:mood_tracking}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 181021.png}
+    \caption{AI companion interface showing conversational interaction and personalized recommendations.}
+    \label{fig:ai_companion}
+    
+    \vspace{1cm}
+    
+    \includegraphics[width=0.7\textwidth]{screenshots/Screenshot 2025-11-07 181033.png}
+    \caption{Export and data management options for journal entries and analytics.}
+    \label{fig:export_data}
+\end{figure}
 
 \end{document}
