@@ -6,7 +6,6 @@
 
 	let startDate = $state('');
 	let endDate = $state('');
-	let includeMood = $state(true);
 	let includeSentiment = $state(true);
 	let includeStats = $state(true);
 	let format = $state<'pdf' | 'json' | 'markdown'>('pdf');
@@ -25,7 +24,7 @@
 
 		const start = new Date(startDate);
 		const end = new Date(endDate);
-		end.setHours(23, 59, 59, 999); // Include the entire end date
+		end.setHours(23, 59, 59, 999);
 
 		return data.entries.filter((entry) => {
 			const entryDate = new Date(entry.createdAt);
@@ -33,27 +32,13 @@
 		});
 	}
 
-	function getSentimentEmoji(score: number | null): string {
-		if (score === null) return '😐';
-		if (score > 50) return '😊';
-		if (score > 0) return '🙂';
-		if (score === 0) return '😐';
-		if (score > -50) return '😟';
-		return '😢';
-	}
-
-	function getMoodEmoji(mood: string): string {
-		const moodMap: Record<string, string> = {
-			happy: '😊',
-			neutral: '😐',
-			sad: '😢',
-			anxious: '😰',
-			excited: '🤩',
-			angry: '😠',
-			calm: '😌',
-			stressed: '😫'
-		};
-		return moodMap[mood.toLowerCase()] || '😐';
+	function getSentimentLabel(score: number | null): string {
+		if (score === null) return 'Neutral';
+		if (score > 50) return 'Very Positive';
+		if (score > 0) return 'Positive';
+		if (score === 0) return 'Neutral';
+		if (score > -50) return 'Negative';
+		return 'Very Negative';
 	}
 
 	async function exportToPDF() {
@@ -70,11 +55,11 @@
 			// Title
 			doc.setFontSize(24);
 			doc.setFont('helvetica', 'bold');
-			doc.text('My Mood Journal', margin, y);
+			doc.text('Journal Export', margin, y);
 			y += 15;
 
-			// Date range
-			doc.setFontSize(12);
+			// Metadata
+			doc.setFontSize(11);
 			doc.setFont('helvetica', 'normal');
 			doc.setTextColor(100);
 			doc.text(
@@ -82,7 +67,7 @@
 				margin,
 				y
 			);
-			y += 10;
+			y += 7;
 			doc.text(
 				`Period: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`,
 				margin,
@@ -95,35 +80,21 @@
 				const avgSentiment =
 					filteredEntries.reduce((sum, e) => sum + (e.sentimentScore || 0), 0) /
 					filteredEntries.length;
-				const moodCounts = filteredEntries.reduce(
-					(acc, e) => {
-						acc[e.mood] = (acc[e.mood] || 0) + 1;
-						return acc;
-					},
-					{} as Record<string, number>
-				);
-				const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0];
 
-				doc.setFillColor(240, 240, 250);
-				doc.rect(margin, y, maxWidth, 30, 'F');
+				doc.setFillColor(245, 247, 250);
+				doc.rect(margin, y, maxWidth, 25, 'F');
 				y += 8;
 
 				doc.setFontSize(14);
 				doc.setFont('helvetica', 'bold');
 				doc.setTextColor(0);
-				doc.text('📊 Summary Statistics', margin + 5, y);
+				doc.text('Summary Statistics', margin + 5, y);
 				y += 8;
 
 				doc.setFontSize(10);
 				doc.setFont('helvetica', 'normal');
 				doc.text(
-					`Average Sentiment: ${Math.round(avgSentiment)} ${getSentimentEmoji(avgSentiment)}`,
-					margin + 5,
-					y
-				);
-				y += 6;
-				doc.text(
-					`Most Common Mood: ${topMood[0]} ${getMoodEmoji(topMood[0])} (${topMood[1]} entries)`,
+					`Average Sentiment: ${Math.round(avgSentiment)} (${getSentimentLabel(avgSentiment)})`,
 					margin + 5,
 					y
 				);
@@ -163,11 +134,6 @@
 					minute: '2-digit'
 				});
 				doc.text(dateStr, margin + 2, y);
-
-				if (includeMood) {
-					const moodText = `${getMoodEmoji(entry.mood)} ${entry.mood}`;
-					doc.text(moodText, pageWidth - margin - doc.getTextWidth(moodText), y);
-				}
 				y += 8;
 
 				// Sentiment
@@ -176,7 +142,7 @@
 					doc.setFont('helvetica', 'normal');
 					doc.setTextColor(100);
 					doc.text(
-						`Sentiment: ${getSentimentEmoji(entry.sentimentScore)} ${entry.sentimentScore > 0 ? '+' : ''}${entry.sentimentScore}`,
+						`Sentiment: ${entry.sentimentScore > 0 ? '+' : ''}${entry.sentimentScore} (${getSentimentLabel(entry.sentimentScore)})`,
 						margin + 2,
 						y
 					);
@@ -206,13 +172,13 @@
 				}
 
 				y += 8;
-				doc.setDrawColor(200);
+				doc.setDrawColor(220);
 				doc.line(margin, y, pageWidth - margin, y);
 				y += 10;
 			}
 
 			// Save the PDF
-			const filename = `mood-journal-${startDate}-to-${endDate}.pdf`;
+			const filename = `journal-export-${startDate}-to-${endDate}.pdf`;
 			doc.save(filename);
 		} catch (error) {
 			console.error('PDF export failed:', error);
@@ -236,9 +202,10 @@
 				entries: filteredEntries.map((entry) => ({
 					id: entry.id,
 					content: entry.content,
-					mood: entry.mood,
-					sentimentScore: entry.sentimentScore,
-					sentimentLabel: entry.sentimentLabel,
+					...(includeSentiment && {
+						sentimentScore: entry.sentimentScore,
+						sentimentLabel: entry.sentimentLabel
+					}),
 					createdAt: entry.createdAt
 				}))
 			};
@@ -249,7 +216,7 @@
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			a.download = `mood-journal-${startDate}-to-${endDate}.json`;
+			a.download = `journal-export-${startDate}-to-${endDate}.json`;
 			a.click();
 			URL.revokeObjectURL(url);
 		} catch (error) {
@@ -264,10 +231,20 @@
 		exporting = true;
 		try {
 			const filteredEntries = getFilteredEntries();
-			let markdown = `# My Mood Journal\n\n`;
+			let markdown = `# Journal Export\n\n`;
 			markdown += `**Exported:** ${new Date().toLocaleDateString()}\n\n`;
 			markdown += `**Period:** ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}\n\n`;
 			markdown += `**Total Entries:** ${filteredEntries.length}\n\n`;
+
+			if (includeStats && filteredEntries.length > 0) {
+				const avgSentiment =
+					filteredEntries.reduce((sum, e) => sum + (e.sentimentScore || 0), 0) /
+					filteredEntries.length;
+
+				markdown += `## Summary Statistics\n\n`;
+				markdown += `- **Average Sentiment:** ${Math.round(avgSentiment)} (${getSentimentLabel(avgSentiment)})\n\n`;
+			}
+
 			markdown += `---\n\n`;
 
 			for (const entry of filteredEntries) {
@@ -275,11 +252,13 @@
 					weekday: 'long',
 					year: 'numeric',
 					month: 'long',
-					day: 'numeric'
+					day: 'numeric',
+					hour: '2-digit',
+					minute: '2-digit'
 				})}\n\n`;
-				markdown += `**Mood:** ${getMoodEmoji(entry.mood)} ${entry.mood}\n\n`;
+				
 				if (includeSentiment && entry.sentimentScore !== null) {
-					markdown += `**Sentiment:** ${getSentimentEmoji(entry.sentimentScore)} ${entry.sentimentScore > 0 ? '+' : ''}${entry.sentimentScore}\n\n`;
+					markdown += `**Sentiment:** ${entry.sentimentScore > 0 ? '+' : ''}${entry.sentimentScore} (${getSentimentLabel(entry.sentimentScore)})\n\n`;
 				}
 				markdown += `${entry.content}\n\n`;
 				markdown += `---\n\n`;
@@ -289,7 +268,7 @@
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			a.download = `mood-journal-${startDate}-to-${endDate}.md`;
+			a.download = `journal-export-${startDate}-to-${endDate}.md`;
 			a.click();
 			URL.revokeObjectURL(url);
 		} catch (error) {
@@ -314,28 +293,33 @@
 </script>
 
 <svelte:head>
-	<title>Export Journal - Mood Journal</title>
+	<title>Export Journal</title>
 </svelte:head>
 
 <div class="mx-auto max-w-4xl space-y-8 p-6">
 	<!-- Header -->
 	<div class="mb-8">
-		<h1 class="mb-2 text-3xl font-bold text-gray-900 dark:text-white">Export Your Journal</h1>
-		<p class="text-gray-600 dark:text-gray-400">
+		<h1 class="mb-2 text-4xl font-bold gradient-text">Export Your Journal</h1>
+		<p class="text-base text-muted-foreground">
 			Download your journal entries in your preferred format
 		</p>
 	</div>
 
 	<!-- Export Configuration -->
-	<div class="space-y-6 rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+	<div class="notion-card space-y-6">
 		<!-- Date Range -->
 		<div>
-			<h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">📅 Date Range</h3>
+			<h3 class="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
+				<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+				</svg>
+				Date Range
+			</h3>
 			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<div>
 					<label
 						for="start-date"
-						class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+						class="mb-2 block text-sm font-medium text-foreground"
 					>
 						Start Date
 					</label>
@@ -343,13 +327,13 @@
 						id="start-date"
 						type="date"
 						bind:value={startDate}
-						class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+						class="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
 					/>
 				</div>
 				<div>
 					<label
 						for="end-date"
-						class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+						class="mb-2 block text-sm font-medium text-foreground"
 					>
 						End Date
 					</label>
@@ -357,52 +341,69 @@
 						id="end-date"
 						type="date"
 						bind:value={endDate}
-						class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+						class="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
 					/>
 				</div>
 			</div>
-			<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-				{filteredCount}
+			<p class="mt-3 text-sm text-muted-foreground">
+				<span class="font-semibold text-primary">{filteredCount}</span>
 				{filteredCount === 1 ? 'entry' : 'entries'} in selected range
 			</p>
 		</div>
 
 		<!-- Format Selection -->
 		<div>
-			<h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">📄 Export Format</h3>
+			<h3 class="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
+				<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+				</svg>
+				Export Format
+			</h3>
 			<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
 				<button
 					onclick={() => (format = 'pdf')}
-					class="rounded-lg border-2 p-4 transition-all {format === 'pdf'
-						? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-						: 'border-gray-300 hover:border-gray-400 dark:border-gray-600'}"
+					class="group rounded-xl border-2 p-5 transition-all hover:scale-[1.02] {format === 'pdf'
+						? 'border-primary bg-primary/5 shadow-sm'
+						: 'border-border hover:border-primary/50'}"
 					type="button"
 				>
-					<div class="mb-2 text-3xl">📕</div>
-					<div class="font-medium text-gray-900 dark:text-white">PDF</div>
-					<div class="text-xs text-gray-500 dark:text-gray-400">Formatted document</div>
+					<div class="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-red-500/10 to-red-600/10">
+						<svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+						</svg>
+					</div>
+					<div class="font-semibold text-foreground">PDF</div>
+					<div class="mt-1 text-xs text-muted-foreground">Formatted document</div>
 				</button>
 				<button
 					onclick={() => (format = 'json')}
-					class="rounded-lg border-2 p-4 transition-all {format === 'json'
-						? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-						: 'border-gray-300 hover:border-gray-400 dark:border-gray-600'}"
+					class="group rounded-xl border-2 p-5 transition-all hover:scale-[1.02] {format === 'json'
+						? 'border-primary bg-primary/5 shadow-sm'
+						: 'border-border hover:border-primary/50'}"
 					type="button"
 				>
-					<div class="mb-2 text-3xl">💾</div>
-					<div class="font-medium text-gray-900 dark:text-white">JSON</div>
-					<div class="text-xs text-gray-500 dark:text-gray-400">Data backup</div>
+					<div class="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-green-500/10 to-green-600/10">
+						<svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+						</svg>
+					</div>
+					<div class="font-semibold text-foreground">JSON</div>
+					<div class="mt-1 text-xs text-muted-foreground">Data backup</div>
 				</button>
 				<button
 					onclick={() => (format = 'markdown')}
-					class="rounded-lg border-2 p-4 transition-all {format === 'markdown'
-						? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-						: 'border-gray-300 hover:border-gray-400 dark:border-gray-600'}"
+					class="group rounded-xl border-2 p-5 transition-all hover:scale-[1.02] {format === 'markdown'
+						? 'border-primary bg-primary/5 shadow-sm'
+						: 'border-border hover:border-primary/50'}"
 					type="button"
 				>
-					<div class="mb-2 text-3xl">📝</div>
-					<div class="font-medium text-gray-900 dark:text-white">Markdown</div>
-					<div class="text-xs text-gray-500 dark:text-gray-400">Plain text</div>
+					<div class="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-600/10">
+						<svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+						</svg>
+					</div>
+					<div class="font-semibold text-foreground">Markdown</div>
+					<div class="mt-1 text-xs text-muted-foreground">Plain text</div>
 				</button>
 			</div>
 		</div>
@@ -410,31 +411,29 @@
 		<!-- Export Options -->
 		{#if format === 'pdf'}
 			<div>
-				<h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">⚙️ PDF Options</h3>
+				<h3 class="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+					</svg>
+					PDF Options
+				</h3>
 				<div class="space-y-3">
-					<label class="flex cursor-pointer items-center gap-3">
-						<input
-							type="checkbox"
-							bind:checked={includeMood}
-							class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-						/>
-						<span class="text-gray-700 dark:text-gray-300">Include mood indicators</span>
-					</label>
-					<label class="flex cursor-pointer items-center gap-3">
+					<label class="flex cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors hover:bg-accent">
 						<input
 							type="checkbox"
 							bind:checked={includeSentiment}
-							class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+							class="h-5 w-5 rounded border-border text-primary focus:ring-2 focus:ring-primary/50"
 						/>
-						<span class="text-gray-700 dark:text-gray-300">Include sentiment scores</span>
+						<span class="text-foreground">Include sentiment scores</span>
 					</label>
-					<label class="flex cursor-pointer items-center gap-3">
+					<label class="flex cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors hover:bg-accent">
 						<input
 							type="checkbox"
 							bind:checked={includeStats}
-							class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+							class="h-5 w-5 rounded border-border text-primary focus:ring-2 focus:ring-primary/50"
 						/>
-						<span class="text-gray-700 dark:text-gray-300">Include summary statistics</span>
+						<span class="text-foreground">Include summary statistics</span>
 					</label>
 				</div>
 			</div>
@@ -446,7 +445,7 @@
 		<button
 			onclick={handleExport}
 			disabled={exporting || filteredCount === 0}
-			class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+			class="notion-btn notion-btn-primary flex-1"
 		>
 			{#if exporting}
 				<div
@@ -454,13 +453,15 @@
 				></div>
 				<span>Exporting...</span>
 			{:else}
-				<span>⬇️</span>
+				<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+				</svg>
 				<span>Export {format.toUpperCase()}</span>
 			{/if}
 		</button>
 		<a
 			href="/journal"
-			class="rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-900 transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+			class="notion-btn notion-btn-secondary"
 		>
 			Back to Journal
 		</a>
@@ -468,16 +469,26 @@
 
 	<!-- Info Box -->
 	<div
-		class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20"
+		class="rounded-xl border border-primary/20 bg-primary/5 p-5"
 	>
-		<h4 class="mb-2 font-semibold text-blue-900 dark:text-blue-300">💡 Export Tips</h4>
-		<ul class="space-y-1 text-sm text-blue-800 dark:text-blue-300">
-			<li>• <strong>PDF:</strong> Best for printing or sharing a beautiful formatted copy</li>
-			<li>
-				• <strong>JSON:</strong> Complete data backup with all metadata for importing elsewhere
+		<h4 class="mb-3 flex items-center gap-2 font-semibold text-primary">
+			<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+			</svg>
+			Export Tips
+		</h4>
+		<ul class="space-y-2 text-sm text-foreground/80">
+			<li class="flex items-start gap-2">
+				<span class="mt-0.5 text-primary">•</span>
+				<span><strong class="text-foreground">PDF:</strong> Best for printing or sharing a beautifully formatted copy</span>
 			</li>
-			<li>
-				• <strong>Markdown:</strong> Plain text format that's easy to edit and version control
+			<li class="flex items-start gap-2">
+				<span class="mt-0.5 text-primary">•</span>
+				<span><strong class="text-foreground">JSON:</strong> Complete data backup with all metadata for importing elsewhere</span>
+			</li>
+			<li class="flex items-start gap-2">
+				<span class="mt-0.5 text-primary">•</span>
+				<span><strong class="text-foreground">Markdown:</strong> Plain text format that's easy to edit and version control</span>
 			</li>
 		</ul>
 	</div>

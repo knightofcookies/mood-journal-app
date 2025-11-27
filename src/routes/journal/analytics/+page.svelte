@@ -30,124 +30,151 @@
 	<title>Analytics & Insights - Mood Journal</title>
 </svelte:head>
 
-<div class="mx-auto max-w-6xl space-y-8 p-6">
-	<!-- Header -->
-	<div class="mb-8">
-		<h1 class="mb-2 text-3xl font-bold text-foreground">Analytics & Insights</h1>
-		<p class="text-muted-foreground">
-			Understand your emotional patterns and track your wellness journey
-		</p>
+<div class="mx-auto max-w-7xl space-y-10 p-6 sm:p-8 bg-gradient-to-br from-background via-background to-accent/5 min-h-screen">
+	<!-- Enhanced Header -->
+	<div class="mb-10 fade-in">
+		<div class="flex items-center gap-4 mb-4">
+			<div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-3xl shadow-xl floating">
+				📊
+			</div>
+			<div>
+				<h1 class="text-5xl font-black gradient-text">Analytics & Insights</h1>
+				<p class="text-muted-foreground text-lg mt-2">
+					Understand your emotional patterns and track your wellness journey
+				</p>
+			</div>
+		</div>
 	</div>
 
-	<!-- Statistics Cards -->
-	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+	<!-- Enhanced Statistics Cards -->
+	<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
 		<!-- Total Entries -->
-		<div class="rounded-lg bg-card border border-border p-6 shadow">
-			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-muted-foreground">Total Entries</h3>
-				<span class="text-2xl">📝</span>
+		<div class="notion-card p-6 shadow-xl hover:shadow-2xl fade-in group" style="animation-delay: 0ms">
+			<div class="mb-4 flex items-center justify-between">
+				<h3 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Total Entries</h3>
+				<div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+					📝
+				</div>
 			</div>
-			<p class="text-3xl font-bold text-foreground">{stats.totalEntries}</p>
-			<p class="mt-1 text-xs text-muted-foreground">
-				{stats.entriesLast30Days} in last 30 days
-			</p>
+			<p class="text-4xl font-black text-foreground mb-2">{stats.totalEntries}</p>
+			<div class="flex items-center gap-2 text-sm">
+				<span class="px-2 py-1 rounded-full bg-green-500/20 text-green-700 dark:text-green-400 font-semibold">
+					+{stats.entriesLast30Days}
+				</span>
+				<span class="text-muted-foreground">in last 30 days</span>
+			</div>
 		</div>
 
 		<!-- Average Sentiment -->
-		<div class="rounded-lg bg-card border border-border p-6 shadow">
-			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-muted-foreground">Avg Sentiment</h3>
-				<span class="text-2xl">{getSentimentEmoji(stats.avgSentiment)}</span>
+		<div class="notion-card p-6 shadow-xl hover:shadow-2xl fade-in group" style="animation-delay: 100ms">
+			<div class="mb-4 flex items-center justify-between">
+				<h3 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Avg Sentiment</h3>
+				<div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-blue-500/20 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">
+					{getSentimentEmoji(stats.avgSentiment)}
+				</div>
 			</div>
-			<p class="text-3xl font-bold {getSentimentColor(stats.avgSentiment)}">
+			<p class="text-4xl font-black {getSentimentColor(stats.avgSentiment)} mb-2">
 				{stats.avgSentiment > 0 ? '+' : ''}{stats.avgSentiment}
 			</p>
-			<p class="mt-1 text-xs text-muted-foreground">
+			<p class="text-sm text-muted-foreground font-medium">
 				{stats.avgSentiment > 50
-					? 'Very positive'
+					? '🎉 Very positive'
 					: stats.avgSentiment > 0
-						? 'Positive'
+						? '😊 Positive'
 						: stats.avgSentiment === 0
-							? 'Neutral'
+							? '😐 Neutral'
 							: stats.avgSentiment > -50
-								? 'Negative'
-								: 'Very negative'}
+								? '🤔 Negative'
+								: '😔 Very negative'}
 			</p>
 		</div>
 
 		<!-- Current Streak -->
-		<div class="rounded-lg bg-card border border-border p-6 shadow">
-			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-muted-foreground">Current Streak</h3>
-				<span class="text-2xl">🔥</span>
+		<div class="notion-card p-6 shadow-xl hover:shadow-2xl fade-in group" style="animation-delay: 200ms">
+			<div class="mb-4 flex items-center justify-between">
+				<h3 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Current Streak</h3>
+				<div class="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform pulse-glow">
+					🔥
+				</div>
 			</div>
-			<p class="text-3xl font-bold text-orange-600">{stats.activeStreak}</p>
-			<p class="mt-1 text-xs text-muted-foreground">
+			<p class="text-4xl font-black text-orange-600 dark:text-orange-400 mb-2">{stats.activeStreak}</p>
+			<p class="text-sm text-muted-foreground font-medium">
 				{stats.activeStreak === 1 ? 'day' : 'days'} in a row
 			</p>
 		</div>
 
 		<!-- Longest Streak -->
-		<div class="rounded-lg bg-card border border-border p-6 shadow">
-			<div class="mb-2 flex items-center justify-between">
-				<h3 class="text-sm font-medium text-muted-foreground">Best Streak</h3>
-				<span class="text-2xl">🏆</span>
+		<div class="notion-card p-6 shadow-xl hover:shadow-2xl fade-in group" style="animation-delay: 300ms">
+			<div class="mb-4 flex items-center justify-between">
+				<h3 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Best Streak</h3>
+				<div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">
+					🏆
+				</div>
 			</div>
-			<p class="text-3xl font-bold text-purple-600">{stats.longestStreak}</p>
-			<p class="mt-1 text-xs text-muted-foreground">Personal record</p>
+			<p class="text-4xl font-black text-purple-600 dark:text-purple-400 mb-2">{stats.longestStreak}</p>
+			<p class="text-sm text-muted-foreground font-medium">Personal record</p>
 		</div>
 	</div>
 
-	<!-- Mood Trends Chart -->
-	<div class="rounded-lg bg-card border border-border p-6 shadow">
-		<div class="mb-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-			<h2 class="text-xl font-bold text-foreground">Mood Trends Over Time</h2>
+	<!-- Enhanced Mood Trends Chart -->
+	<div class="notion-card p-8 shadow-xl hover:shadow-2xl fade-in" style="animation-delay: 400ms">
+		<div class="mb-6 flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-center">
+			<div>
+				<h2 class="text-2xl font-bold text-foreground mb-2">Mood Trends Over Time</h2>
+				<p class="text-muted-foreground text-sm">Track your emotional patterns and wellness progress</p>
+			</div>
 
-			<div class="flex flex-wrap gap-2">
+			<div class="flex flex-wrap gap-3">
 				<!-- Time Range Selector -->
-				<div class="flex gap-1 rounded-lg bg-secondary p-1">
+				<div class="flex gap-1 rounded-xl bg-secondary/50 p-1.5 backdrop-blur-sm">
 					<button
 						onclick={() => (timeRange = 'daily')}
-						class="rounded px-3 py-1 text-sm font-medium transition-colors {timeRange === 'daily'
-							? 'bg-card text-blue-600 shadow'
-							: 'text-muted-foreground hover:text-foreground'}"
+						class="rounded-lg px-4 py-2.5 text-sm font-semibold transition-all {timeRange === 'daily'
+							? 'bg-card text-primary shadow-lg scale-105'
+							: 'text-muted-foreground hover:text-foreground hover:bg-card/50'}"
 					>
 						Daily
 					</button>
 					<button
 						onclick={() => (timeRange = 'weekly')}
-						class="rounded px-3 py-1 text-sm font-medium transition-colors {timeRange === 'weekly'
-							? 'bg-card text-blue-600 shadow'
-							: 'text-muted-foreground hover:text-foreground'}"
+						class="rounded-lg px-4 py-2.5 text-sm font-semibold transition-all {timeRange === 'weekly'
+							? 'bg-card text-primary shadow-lg scale-105'
+							: 'text-muted-foreground hover:text-foreground hover:bg-card/50'}"
 					>
 						Weekly
 					</button>
 					<button
 						onclick={() => (timeRange = 'monthly')}
-						class="rounded px-3 py-1 text-sm font-medium transition-colors {timeRange === 'monthly'
-							? 'bg-card text-blue-600 shadow'
-							: 'text-muted-foreground hover:text-foreground'}"
+						class="rounded-lg px-4 py-2.5 text-sm font-semibold transition-all {timeRange === 'monthly'
+							? 'bg-card text-primary shadow-lg scale-105'
+							: 'text-muted-foreground hover:text-foreground hover:bg-card/50'}"
 					>
 						Monthly
 					</button>
 				</div>
 
 				<!-- Chart Type Selector -->
-				<div class="flex gap-1 rounded-lg bg-secondary p-1">
+				<div class="flex gap-1 rounded-xl bg-secondary/50 p-1.5 backdrop-blur-sm">
 					<button
 						onclick={() => (chartType = 'line')}
-						class="rounded px-3 py-1 text-sm font-medium transition-colors {chartType === 'line'
-							? 'bg-card text-blue-600 shadow'
-							: 'text-muted-foreground hover:text-foreground'}"
+						class="rounded-lg px-4 py-2.5 text-sm font-semibold transition-all flex items-center gap-2 {chartType === 'line'
+							? 'bg-card text-primary shadow-lg scale-105'
+							: 'text-muted-foreground hover:text-foreground hover:bg-card/50'}"
 					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+						</svg>
 						Line
 					</button>
 					<button
 						onclick={() => (chartType = 'bar')}
-						class="rounded px-3 py-1 text-sm font-medium transition-colors {chartType === 'bar'
-							? 'bg-card text-blue-600 shadow'
-							: 'text-muted-foreground hover:text-foreground'}"
+						class="rounded-lg px-4 py-2.5 text-sm font-semibold transition-all flex items-center gap-2 {chartType === 'bar'
+							? 'bg-card text-primary shadow-lg scale-105'
+							: 'text-muted-foreground hover:text-foreground hover:bg-card/50'}"
 					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+						</svg>
 						Bar
 					</button>
 				</div>
